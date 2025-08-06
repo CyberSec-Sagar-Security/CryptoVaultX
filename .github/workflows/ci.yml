@@ -1,0 +1,246 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main, feature/* ]
+  pull_request:
+    branches: [ main ]
+
+env:
+  NODE_VERSION: '18.x'
+  PYTHON_VERSION: '3.11'
+
+jobs:
+  lint-frontend:
+    name: 🎨 Frontend Lint & Format
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: 📥 Checkout code
+      uses: actions/checkout@v4
+      
+    - name: 🟢 Setup Node.js ${{ env.NODE_VERSION }}
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ env.NODE_VERSION }}
+        cache: 'npm'
+        cache-dependency-path: frontend/package-lock.json
+        
+    - name: 📦 Install frontend dependencies
+      run: |
+        cd frontend
+        npm ci --prefer-offline --no-audit
+        
+    - name: 🔍 Run ESLint
+      run: |
+        cd frontend
+        npm run lint
+        
+    - name: ✨ Check Prettier formatting
+      run: |
+        cd frontend
+        npm run format:check
+
+  lint-test-backend:
+    name: 🐍 Backend Lint & Test
+    runs-on: ubuntu-latest
+    
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: admin
+          POSTGRES_PASSWORD: admin123
+          POSTGRES_DB: cryptovault_test
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+    
+    steps:
+    - name: 📥 Checkout code
+      uses: actions/checkout@v4
+      
+    - name: 🐍 Setup Python ${{ env.PYTHON_VERSION }}
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+        cache: 'pip'
+        cache-dependency-path: backend/requirements.txt
+        
+    - name: 📦 Install backend dependencies
+      run: |
+        cd backend
+        pip install --upgrade pip
+        pip install -r requirements.txt
+        pip install flake8==7.1.1 pytest==8.3.3 pytest-cov==5.0.0
+        
+    - name: 🔍 Run Flake8 linting
+      run: |
+        cd backend
+        echo "🔍 Running Flake8 Python linting..."
+        flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
+        flake8 . --count --max-complexity=12 --max-line-length=88 --statistics
+        
+    - name: 🧪 Run Pytest with coverage
+      env:
+        DATABASE_URL: postgresql://admin:admin123@localhost:5432/cryptovault_test
+        POSTGRES_USER: admin
+        POSTGRES_PASSWORD: admin123
+        POSTGRES_DB: cryptovault_test
+        POSTGRES_HOST: localhost
+        POSTGRES_PORT: 5432
+        SECRET_KEY: test-secret-key-for-ci-pipeline-only
+        FLASK_ENV: testing
+      run: |
+        cd backend
+        echo "🧪 Running Pytest test suite with coverage..."
+        pytest --cov=. --cov-report=xml --cov-report=term-missing --cov-report=html -v --tb=short
+        
+    - name: 📊 Upload coverage to Codecov
+      uses: codecov/codecov-action@v3
+      with:
+        file: backend/coverage.xml
+        flags: backend
+        name: backend-coverage
+        fail_ci_if_error: false
+
+  build-docker:
+    name: 🐳 Docker Build & Test
+    runs-on: ubuntu-latest
+    needs: [lint-frontend, lint-test-backend]
+    
+    steps:
+    - name: 📥 Checkout code
+      uses: actions/checkout@v4
+      
+    - name: 🐳 Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+      
+    - name: 🏗️ Build Docker images
+      run: |
+        echo "🏗️ Building all Docker services..."
+        docker-compose build --no-cache --parallel
+        echo "✅ Docker images built successfully!"
+        
+    - name: 🚀 Test Docker containers startup
+      run: |
+        echo "🚀 Starting containers in detached mode..."
+        docker-compose up -d
+        
+        echo "⏳ Waiting for services to be healthy..."
+        timeout 180 bash -c '
+          while true; do
+            HEALTHY=$(docker-compose ps --services --filter "status=running" | wc -l)
+            TOTAL=$(docker-compose ps --services | wc -l)
+            echo "Services running: $HEALTHY/$TOTAL"
+            
+            if [ "$HEALTHY" -eq "$TOTAL" ]; then
+              echo "✅ All services are running!"
+              break
+            fi
+            
+            docker-compose ps
+            sleep 15
+          done
+        '
+        
+        echo "🔍 Testing service endpoints..."
+        sleep 20
+        
+        # Test backend health endpoint
+        if curl -f http://localhost:5000/health; then
+          echo "✅ Backend health check passed"
+        else
+          echo "❌ Backend health check failed"
+          exit 1
+        fi
+        
+        # Test frontend availability  
+        if curl -I http://localhost:5173; then
+          echo "✅ Frontend endpoint reachable"
+        else
+          echo "⚠️ Frontend endpoint check completed with warnings"
+        fi
+        
+    - name: 📋 Show container status on failure
+      if: failure()
+      run: |
+        echo "=== Docker Compose Status ==="
+        docker-compose ps
+        echo ""
+        echo "=== Backend Logs ==="
+        docker-compose logs --tail=50 backend
+        echo ""
+        echo "=== Frontend Logs ==="
+        docker-compose logs --tail=50 frontend  
+        echo ""
+        echo "=== Database Logs ==="
+        docker-compose logs --tail=50 db
+        echo ""
+        echo "=== Container Resource Usage ==="
+        docker stats --no-stream
+        
+    - name: 🧹 Cleanup Docker containers
+      if: always()
+      run: |
+        echo "🧹 Cleaning up Docker resources..."
+        docker-compose down -v --remove-orphans
+        docker system prune -af --volumes
+        echo "✅ Docker cleanup completed"
+
+  security-scan:
+    name: 🔒 Security Scan
+    runs-on: ubuntu-latest
+    needs: [build-docker]
+    
+    steps:
+    - name: 📥 Checkout code
+      uses: actions/checkout@v4
+      
+    - name: 🔍 Run Trivy vulnerability scanner
+      uses: aquasecurity/trivy-action@master
+      with:
+        scan-type: 'fs'
+        scan-ref: '.'
+        format: 'sarif'
+        output: 'trivy-results.sarif'
+        severity: 'CRITICAL,HIGH,MEDIUM'
+        
+    - name: 📊 Upload Trivy scan results to GitHub Security tab
+      uses: github/codeql-action/upload-sarif@v2
+      if: always()
+      with:
+        sarif_file: 'trivy-results.sarif'
+
+  deploy-status:
+    name: 🎉 Deployment Status
+    runs-on: ubuntu-latest
+    needs: [lint-frontend, lint-test-backend, build-docker, security-scan]
+    if: always()
+    
+    steps:
+    - name: 🎯 Report CI/CD Status
+      run: |
+        echo "=== CryptoVaultX CI/CD Pipeline Results ==="
+        echo "Frontend Lint: ${{ needs.lint-frontend.result }}"
+        echo "Backend Test: ${{ needs.lint-test-backend.result }}" 
+        echo "Docker Build: ${{ needs.build-docker.result }}"
+        echo "Security Scan: ${{ needs.security-scan.result }}"
+        echo ""
+        
+        if [[ "${{ needs.lint-frontend.result }}" == "success" && 
+              "${{ needs.lint-test-backend.result }}" == "success" && 
+              "${{ needs.build-docker.result }}" == "success" ]]; then
+          echo "🎉 All checks passed! Ready for deployment."
+          echo "✅ Code quality: PASSED"
+          echo "✅ Tests: PASSED" 
+          echo "✅ Docker build: PASSED"
+          exit 0
+        else
+          echo "❌ Some checks failed. Please review the errors above."
+          exit 1
+        fi

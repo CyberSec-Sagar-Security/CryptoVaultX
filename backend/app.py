@@ -108,7 +108,7 @@ def get_files():
                     "full_name": file.owner.full_name
                 },
                 "created_at": file.created_at.isoformat(),
-                "expires_at": file.expires_at.isoformat() if file.expires_at else None,
+                "updated_at": file.updated_at.isoformat(),
                 "share_count": len(file.shared_files)
             })
         
