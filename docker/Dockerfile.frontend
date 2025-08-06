@@ -1,0 +1,23 @@
+FROM node:18
+
+# Set working directory
+WORKDIR /app
+
+# Install dependencies
+COPY ../frontend/package.json ../frontend/package-lock.json ./
+RUN npm install
+
+# Copy all frontend code
+COPY ../frontend .
+
+# Build app
+RUN npm run build
+
+# Install serve to serve build files
+RUN npm install -g serve
+
+# Expose frontend port
+EXPOSE 5173
+
+# Start production server
+CMD ["serve", "-s", "dist"]
