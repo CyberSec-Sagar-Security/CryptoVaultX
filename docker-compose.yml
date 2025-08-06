@@ -1,0 +1,52 @@
+services:
+  db:
+    image: postgres:15
+    environment:
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: admin123
+      POSTGRES_DB: cryptovault_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - dbdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U admin -d cryptovault_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.backend
+    ports:
+      - "5000:5000"
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      - POSTGRES_USER=admin
+      - POSTGRES_PASSWORD=admin123
+      - POSTGRES_DB=cryptovault_db
+      - POSTGRES_HOST=db
+      - POSTGRES_PORT=5432
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  frontend:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.frontend
+    ports:
+      - "5173:5173"
+    depends_on:
+      backend:
+        condition: service_healthy
+    environment:
+      - VITE_API_URL=http://localhost:5000
+
+volumes:
+  dbdata:

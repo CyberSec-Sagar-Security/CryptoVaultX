@@ -1,0 +1,41 @@
+{
+  "name": "cryptovaultx",
+  "version": "1.0.0",
+  "description": "Secure file sharing application with client-side encryption",
+  "private": true,
+  "workspaces": [
+    "frontend",
+    "backend"
+  ],
+  "scripts": {
+    "dev": "docker-compose up",
+    "dev:frontend": "cd frontend && npm run dev",
+    "dev:backend": "cd backend && python app.py",
+    "build": "cd frontend && npm run build",
+    "lint": "cd frontend && npm run lint",
+    "format": "cd frontend && npm run format",
+    "prepare": "husky"
+  },
+  "devDependencies": {
+    "husky": "^9.0.0",
+    "lint-staged": "^15.0.0"
+  },
+  "lint-staged": {
+    "frontend/**/*.{js,jsx,ts,tsx}": [
+      "powershell -Command \"cd frontend; npm run lint:fix\"",
+      "powershell -Command \"cd frontend; npm run format\""
+    ],
+    "frontend/**/*.{json,css,md}": [
+      "powershell -Command \"cd frontend; npm run format\""
+    ]
+  },
+  "keywords": [
+    "file-sharing",
+    "encryption",
+    "security",
+    "react",
+    "flask"
+  ],
+  "author": "CryptoVaultX Team",
+  "license": "MIT"
+}
