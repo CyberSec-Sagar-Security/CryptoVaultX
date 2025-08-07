@@ -10,6 +10,7 @@
     "lint:fix": "eslint . --fix",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
+    "test": "echo 'Frontend tests will be implemented in Phase 5 with Vitest'",
     "preview": "vite preview",
     "prepare": "husky"
   },
