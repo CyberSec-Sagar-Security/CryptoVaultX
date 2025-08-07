@@ -130,27 +130,27 @@ jobs:
     - name: 🏗️ Build Docker images
       run: |
         echo "🏗️ Building all Docker services..."
-        docker-compose build --no-cache
+        docker compose build --no-cache
         echo "✅ Docker images built successfully!"
         
     - name: 🚀 Test Docker containers startup
       run: |
         echo "🚀 Starting containers in detached mode..."
-        docker-compose up -d
+        docker compose up -d
         
         echo "⏳ Waiting for services to be healthy..."
         timeout 300 bash -c '
           while true; do
             # Check if all services are running
-            if docker-compose ps --format "table {{.Name}}\t{{.Status}}" | grep -v "Up" | grep -q "Exit\|Down"; then
+            if docker compose ps --format "table {{.Name}}\t{{.Status}}" | grep -v "Up" | grep -q "Exit\|Down"; then
               echo "❌ Some services failed to start"
-              docker-compose ps
+              docker compose ps
               exit 1
             fi
             
             # Count healthy services
-            BACKEND_HEALTHY=$(docker-compose ps --format "table {{.Name}}\t{{.Status}}" | grep -c "Up.*healthy" || echo "0")
-            DB_HEALTHY=$(docker-compose ps db --format "table {{.Name}}\t{{.Status}}" | grep -c "Up.*healthy" || echo "0")
+            BACKEND_HEALTHY=$(docker compose ps --format "table {{.Name}}\t{{.Status}}" | grep -c "Up.*healthy" || echo "0")
+            DB_HEALTHY=$(docker compose ps db --format "table {{.Name}}\t{{.Status}}" | grep -c "Up.*healthy" || echo "0")
             TOTAL_EXPECTED=2
             
             echo "Healthy services: Backend($BACKEND_HEALTHY) DB($DB_HEALTHY) / Total($TOTAL_EXPECTED)"
@@ -160,7 +160,7 @@ jobs:
               break
             fi
             
-            docker-compose ps
+            docker compose ps
             sleep 15
           done
         '
@@ -203,16 +203,16 @@ jobs:
       if: failure()
       run: |
         echo "=== Docker Compose Status ==="
-        docker-compose ps
+        docker compose ps
         echo ""
         echo "=== Backend Logs ==="
-        docker-compose logs --tail=50 backend
+        docker compose logs --tail=50 backend
         echo ""
         echo "=== Frontend Logs ==="
-        docker-compose logs --tail=50 frontend  
+        docker compose logs --tail=50 frontend  
         echo ""
         echo "=== Database Logs ==="
-        docker-compose logs --tail=50 db
+        docker compose logs --tail=50 db
         echo ""
         echo "=== Container Resource Usage ==="
         docker stats --no-stream
@@ -221,7 +221,7 @@ jobs:
       if: always()
       run: |
         echo "🧹 Cleaning up Docker resources..."
-        docker-compose down -v --remove-orphans
+        docker compose down -v --remove-orphans
         docker system prune -af --volumes
         echo "✅ Docker cleanup completed"
 
