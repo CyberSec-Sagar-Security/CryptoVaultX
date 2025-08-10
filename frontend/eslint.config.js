@@ -12,7 +12,7 @@ export default [
   
   // Main configuration
   {
-    files: ['**/*.{js,jsx}'],
+    files: ['**/*.{js,jsx,ts,tsx}'],
     languageOptions: {
       ecmaVersion: 2020,
       globals: globals.browser,
@@ -69,9 +69,9 @@ export default [
       'no-duplicate-imports': 'error',
       
       // Style rules (basic)
-      'semi': ['error', 'always'],
-      'quotes': ['error', 'single', { avoidEscape: true }],
-      'comma-dangle': ['error', 'always-multiline'],
+  'semi': ['error', 'always'],
+  'quotes': ['error', 'single', { avoidEscape: true }],
+  'comma-dangle': ['error', 'always-multiline'],
     },
   },
 ]
