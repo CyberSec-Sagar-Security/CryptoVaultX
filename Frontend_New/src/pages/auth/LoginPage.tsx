@@ -5,6 +5,7 @@ import { Lock, Mail, Shield, ArrowRight, Eye, EyeOff } from 'lucide-react'
 import { Button } from '../../components/ui/button'
 import { Input } from '../../components/ui/input'
 import { Label } from '../../components/ui/label'
+import { useAuth } from '../../services/auth'
 import {
   Card,
   CardContent,
@@ -17,6 +18,7 @@ import { Alert, AlertDescription } from '../../components/ui/alert'
 
 const Login = () => {
   const navigate = useNavigate()
+  const { login } = useAuth()
   const [formData, setFormData] = useState({ email: '', password: '' })
   const [showPassword, setShowPassword] = useState(false)
   const [loading, setLoading] = useState(false)
@@ -33,46 +35,20 @@ const Login = () => {
     setError('')
 
     try {
-      console.log('🚀 Attempting login with:', { email: formData.email })
-      console.log('🌐 API URL:', 'http://localhost:5000/api/auth/login')
+      console.log('🚀 Attempting login with AuthProvider:', { email: formData.email })
       
-      const response = await fetch('http://localhost:5000/api/auth/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          email: formData.email,
-          password: formData.password
-        })
+      await login({
+        email: formData.email,
+        password: formData.password
       })
       
-      console.log('📡 Response status:', response.status)
-      console.log('📡 Response headers:', Object.fromEntries(response.headers.entries()))
-      
-      const data = await response.json()
-      console.log('📦 Response data:', data)
-      
-      if (!response.ok) {
-        throw new Error(data.message || 'Login failed')
-      }
-      
-      // Store token if provided
-      if (data.token) {
-        localStorage.setItem('access_token', data.token)
-        console.log('🔑 Token stored successfully')
-      }
-      
-      console.log('✅ Login successful:', formData.email)
+      console.log('✅ Login successful via AuthProvider')
       setError('🎉 Login successful! Redirecting to dashboard...')
       
-      // Store user data if provided
-      if (data.user) {
-        localStorage.setItem('user', JSON.stringify(data.user))
-      }
-      
-      // Redirect to dashboard after short delay to show success message
+      // Navigate immediately since AuthProvider handles state
       setTimeout(() => {
         navigate('/dashboard')
-      }, 1500)
+      }, 1000)
       
     } catch (err) {
       console.error('❌ Login error:', err)
