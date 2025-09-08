@@ -133,6 +133,7 @@ cython_debug/
 
 # React / Node.js
 node_modules/
+.vite/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
