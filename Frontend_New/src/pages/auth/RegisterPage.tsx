@@ -15,15 +15,42 @@ import {
 } from '../../components/ui/card'
 import { Alert, AlertDescription } from '../../components/ui/alert'
 
+interface FormData {
+  name: string
+  email: string
+  password: string
+  confirm: string
+  terms: boolean
+}
+
+interface PasswordChecks {
+  length: boolean
+  lower: boolean
+  upper: boolean
+  number: boolean
+  special: boolean
+}
+
+interface PasswordStrength {
+  label: string
+  color: string
+  pct: number
+}
+
+interface Message {
+  type: 'success' | 'error'
+  text: string
+}
+
 const CHECKS = [
-  { key: 'length', label: 'At least 8 characters' },
-  { key: 'lower', label: 'Lowercase (a–z)' },
-  { key: 'upper', label: 'Uppercase (A–Z)' },
-  { key: 'number', label: 'Number (0–9)' },
-  { key: 'special', label: 'Special char (!@#$%^&*)' },
+  { key: 'length' as keyof PasswordChecks, label: 'At least 8 characters' },
+  { key: 'lower' as keyof PasswordChecks, label: 'Lowercase (a–z)' },
+  { key: 'upper' as keyof PasswordChecks, label: 'Uppercase (A–Z)' },
+  { key: 'number' as keyof PasswordChecks, label: 'Number (0–9)' },
+  { key: 'special' as keyof PasswordChecks, label: 'Special char (!@#$%^&*)' },
 ]
 
-function evalChecks(pwd) {
+function evalChecks(pwd: string): PasswordChecks {
   return {
     length: pwd.length >= 8,
     lower: /[a-z]/.test(pwd),
@@ -32,7 +59,8 @@ function evalChecks(pwd) {
     special: /[!@#$%^&*]/.test(pwd),
   }
 }
-function strengthFrom(checks) {
+
+function strengthFrom(checks: PasswordChecks): PasswordStrength {
   const passed = Object.values(checks).filter(Boolean).length
   if (passed <= 2) return { label: 'Weak', color: 'from-red-400 to-red-400', pct: 25 }
   if (passed <= 4) return { label: 'Medium', color: 'from-yellow-400 to-yellow-400', pct: 66 }
@@ -41,16 +69,16 @@ function strengthFrom(checks) {
 
 export default function Register() {
   const navigate = useNavigate()
-  const [form, setForm] = useState({ name: '', email: '', password: '', confirm: '', terms: false })
+  const [form, setForm] = useState<FormData>({ name: '', email: '', password: '', confirm: '', terms: false })
   const [showPwd, setShowPwd] = useState(false)
   const [showConfirm, setShowConfirm] = useState(false)
-  const [checks, setChecks] = useState({ length: false, lower: false, upper: false, number: false, special: false })
-  const [strength, setStrength] = useState({ label: '', color: '', pct: 0 })
+  const [checks, setChecks] = useState<PasswordChecks>({ length: false, lower: false, upper: false, number: false, special: false })
+  const [strength, setStrength] = useState<PasswordStrength>({ label: '', color: '', pct: 0 })
   const [pwdTouched, setPwdTouched] = useState(false) // whether to show checklist
-  const [match, setMatch] = useState(null)
+  const [match, setMatch] = useState<boolean | null>(null)
   const [loading, setLoading] = useState(false)
-  const [message, setMessage] = useState<{type: 'success' | 'error', text: string} | null>(null)
-  const passwordRef = useRef(null)
+  const [message, setMessage] = useState<Message | null>(null)
+  const passwordRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     const c = evalChecks(form.password)
@@ -65,8 +93,8 @@ export default function Register() {
   const onPwdFocus = () => setPwdTouched(true)
   const onPwdBlur = () => { /* keep visible until cleared intentionally */ }
 
-  const updateField = (k) => (e) => {
-    const v = e && e.target ? (e.target.type === 'checkbox' ? e.target.checked : e.target.value) : e
+  const updateField = (k: keyof FormData) => (e: React.ChangeEvent<HTMLInputElement>) => {
+    const v = e.target.type === 'checkbox' ? e.target.checked : e.target.value
     setForm((p) => ({ ...p, [k]: v }))
     setMessage(null)
   }
@@ -84,7 +112,7 @@ export default function Register() {
     )
   }
 
-  const registerRequest = async (payload) => {
+  const registerRequest = async (payload: { username: string; email: string; password: string }) => {
     console.log('🚀 Attempting registration with:', payload)
     console.log('🌐 API URL:', 'http://localhost:5000/api/auth/register')
     
@@ -102,7 +130,7 @@ export default function Register() {
     return json
   }
 
-  const onSubmit = async (e) => {
+  const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setMessage(null)
     
