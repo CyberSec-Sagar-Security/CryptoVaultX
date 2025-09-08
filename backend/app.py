@@ -1,5 +1,5 @@
 import os
-from flask import Flask, jsonify
+from flask import Flask, jsonify, request
 from flask_cors import CORS
 from flask_migrate import Migrate
 from flask_jwt_extended import JWTManager
@@ -53,8 +53,21 @@ def create_app(config_name=None):
             'message': 'Please provide a valid JWT token'
         }), 401
     
-    # Configure CORS
-    CORS(app, origins=app.config['CORS_ORIGINS'], supports_credentials=True)
+    # Configure CORS - Simple and effective
+    CORS(app, 
+         resources={r"/*": {"origins": "*"}},
+         allow_headers=["Content-Type", "Authorization"],
+         methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"])
+    
+    # Simple CORS handler
+    @app.after_request
+    def after_request(response):
+        response.headers.add('Access-Control-Allow-Origin', '*')
+        response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
+        response.headers.add('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS')
+        if request.method == 'OPTIONS':
+            response.status_code = 200
+        return response
     
     # Register routes
     register_routes(app)
@@ -89,6 +102,12 @@ def create_app(config_name=None):
     @app.errorhandler(405)
     def method_not_allowed(error):
         return jsonify({'error': 'Method not allowed'}), 405
+    
+    # Global OPTIONS route handler for CORS
+    @app.route('/', defaults={'path': ''}, methods=['OPTIONS'])
+    @app.route('/<path:path>', methods=['OPTIONS'])
+    def options_handler(path):
+        return '', 204
     
     return app
 

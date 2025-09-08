@@ -1,10 +1,20 @@
 from flask import Blueprint, request, jsonify
 from flask_jwt_extended import jwt_required, get_jwt_identity, create_access_token
 import re
+import logging
 from models import db, User
 from sqlalchemy.exc import IntegrityError
 
+logger = logging.getLogger(__name__)
+
 auth_bp = Blueprint('auth', __name__)
+
+# Handle OPTIONS requests explicitly for CORS preflight
+@auth_bp.route('/<path:path>', methods=['OPTIONS'])
+@auth_bp.route('/', methods=['OPTIONS'])
+def handle_options_requests(path=None):
+    """Handle preflight OPTIONS requests for CORS"""
+    return '', 204
 
 def validate_email(email):
     """Validate email format"""
@@ -30,9 +40,17 @@ def validate_password(password):
     
     return True, "Password is valid"
 
-@auth_bp.route('/register', methods=['POST'])
+@auth_bp.route('/register', methods=['POST', 'OPTIONS'])
 def register():
     """Register a new user"""
+    # Log the request details
+    logger.info(f"Register endpoint called with method {request.method}")
+    logger.info(f"Headers: {request.headers}")
+    
+    # Handle preflight OPTIONS request
+    if request.method == 'OPTIONS':
+        logger.info("Handling OPTIONS preflight request")
+        return '', 204
     try:
         data = request.get_json()
         
@@ -93,9 +111,12 @@ def register():
         db.session.rollback()
         return jsonify({'message': 'Registration failed', 'details': str(e)}), 500
 
-@auth_bp.route('/login', methods=['POST'])
+@auth_bp.route('/login', methods=['POST', 'OPTIONS'])
 def login():
     """Authenticate user and return JWT tokens"""
+    # Handle preflight OPTIONS request
+    if request.method == 'OPTIONS':
+        return '', 204
     try:
         data = request.get_json()
         
