@@ -20,7 +20,7 @@ const CHECKS = [
   { key: 'lower', label: 'Lowercase (a–z)' },
   { key: 'upper', label: 'Uppercase (A–Z)' },
   { key: 'number', label: 'Number (0–9)' },
-  { key: 'special', label: 'Special char (!@#$%)' },
+  { key: 'special', label: 'Special char (!@#$%^&*)' },
 ]
 
 function evalChecks(pwd) {
@@ -29,7 +29,7 @@ function evalChecks(pwd) {
     lower: /[a-z]/.test(pwd),
     upper: /[A-Z]/.test(pwd),
     number: /\d/.test(pwd),
-    special: /[^A-Za-z0-9]/.test(pwd),
+    special: /[!@#$%^&*]/.test(pwd),
   }
 }
 function strengthFrom(checks) {
@@ -72,10 +72,13 @@ export default function Register() {
   }
 
   const canSubmit = () => {
+    // Check all password strength requirements
+    const passwordStrong = Object.values(checks).every(Boolean)
+    
     return (
       form.name.trim().length > 0 &&
       /^\S+@\S+\.\S+$/.test(form.email) &&
-      form.password.length >= 8 &&
+      passwordStrong &&
       match === true &&
       form.terms
     )
@@ -123,6 +126,11 @@ export default function Register() {
     if (form.password.length < 8) { 
       console.log('❌ FAILED: Password too short')
       setMessage({ type: 'error', text: 'Password must be at least 8 characters.' }); 
+      return 
+    }
+    if (!Object.values(checks).every(Boolean)) { 
+      console.log('❌ FAILED: Password does not meet strength requirements')
+      setMessage({ type: 'error', text: 'Password must include uppercase, lowercase, number, and special character (!@#$%^&*).' }); 
       return 
     }
     if (match !== true) { 
