@@ -5,7 +5,7 @@
 
 import React, { useState } from 'react';
 import { Sidebar } from './Sidebar';
-import { Navbar } from './Navbar.tsx';
+import { Navbar } from './Navbar';
 
 interface DashboardLayoutProps {
   children: React.ReactNode;

@@ -2,8 +2,9 @@ from flask import Blueprint, request, jsonify
 from flask_jwt_extended import jwt_required, get_jwt_identity, create_access_token
 import re
 import logging
-from models import db, User
-from sqlalchemy.exc import IntegrityError
+import bcrypt
+from database import User, db_manager
+import psycopg2
 
 logger = logging.getLogger(__name__)
 
@@ -80,35 +81,30 @@ def register():
         if not is_valid:
             return jsonify({'message': password_message}), 400
         
-        existing_user = User.query.filter((User.email == email) | (User.username == username)).first()
+        # Check if user already exists
+        existing_user = User.find_by_email(email)
         if existing_user:
-            if existing_user.email == email:
-                return jsonify({'message': 'Email already registered'}), 409
-            else:
-                return jsonify({'message': 'Username already taken'}), 409
+            return jsonify({'message': 'Email already registered'}), 409
+            
+        existing_user = User.find_by_username(username)
+        if existing_user:
+            return jsonify({'message': 'Username already taken'}), 409
         
-        user = User(
-            username=username,
-            name=username,
-            email=email
-        )
-        user.set_password(password)
+        # Create new user
+        user_data = User.create(username, email, password, username)
+        if user_data:
+            return jsonify({
+                'success': True,
+                'message': 'User registered successfully',
+                'user': user_data
+            }), 201
+        else:
+            return jsonify({'message': 'Registration failed'}), 500
         
-        db.session.add(user)
-        db.session.commit()
-        
-        return jsonify({
-            'success': True,
-            'message': 'User registered successfully',
-            'user': user.to_dict()
-        }), 201
-        
-    except IntegrityError:
-        db.session.rollback()
+    except psycopg2.IntegrityError:
         return jsonify({'message': 'Email or username already registered'}), 409
     
     except Exception as e:
-        db.session.rollback()
         return jsonify({'message': 'Registration failed', 'details': str(e)}), 500
 
 @auth_bp.route('/login', methods=['POST', 'OPTIONS'])
@@ -132,20 +128,21 @@ def login():
         if not password:
             return jsonify({'message': 'Password is required'}), 400
         
-        user = User.query.filter_by(email=email).first()
+        user = User.find_by_email(email)
         if not user:
             return jsonify({'message': 'Invalid credentials'}), 401
         
-        if not user.check_password(password):
+        # Verify password using bcrypt directly
+        if not bcrypt.checkpw(password.encode('utf-8'), user['password_hash'].encode('utf-8')):
             return jsonify({'message': 'Invalid credentials'}), 401
 
         # Cast identity to string for JWT 'sub' claim compliance
-        access_token = create_access_token(identity=str(user.id))
+        access_token = create_access_token(identity=str(user['id']))
 
         return jsonify({
             'success': True,
             'message': 'Login successful',
-            'user': user.to_dict(),
+            'user': user,
             'token': access_token
         }), 200
         
@@ -163,14 +160,14 @@ def get_current_user():
             current_user_id = int(current_user_identity)
         except (TypeError, ValueError):
             return jsonify({'message': 'Invalid user identity in token'}), 400
-        user = User.query.get(current_user_id)
+        user = User.find_by_id(current_user_id)
         
         if not user:
             return jsonify({'message': 'User not found'}), 404
         
         return jsonify({
             'success': True,
-            'user': user.to_dict()
+            'user': user
         }), 200
         
     except Exception as e:

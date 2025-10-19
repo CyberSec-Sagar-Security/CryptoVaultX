@@ -1,12 +1,11 @@
 import os
 from flask import Flask, jsonify, request
 from flask_cors import CORS
-from flask_migrate import Migrate
 from flask_jwt_extended import JWTManager
 from dotenv import load_dotenv
 
 from config import config
-from models import db
+from database import db_manager, initialize_database, test_connection
 from routes import register_routes
 
 # Load environment variables
@@ -21,9 +20,19 @@ def create_app(config_name=None):
     app.config.from_object(config[config_name])
     
     # Initialize extensions
-    db.init_app(app)
-    migrate = Migrate(app, db)
     jwt = JWTManager(app)
+    
+    # Initialize database connection
+    initialize_database()
+    
+    # Test database connection on startup
+    try:
+        if test_connection():
+            print("✓ Database connection successful")
+        else:
+            print("✗ Database connection failed")
+    except Exception as e:
+        print(f"✗ Database connection error: {e}")
 
     # Since blacklist is enabled in config, ensure tokens are not inadvertently rejected
     @jwt.token_in_blocklist_loader
@@ -75,12 +84,13 @@ def create_app(config_name=None):
     # Create upload directory if it doesn't exist
     os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
     
-    # Database initialization - create tables within app context
+    # Database initialization - already done in initialize_database()
     with app.app_context():
         try:
-            db.create_all()
+            # Database tables already exist, no need to create
+            print("✓ Database tables ready")
         except Exception as e:
-            print(f"Warning: Could not create database tables: {e}")
+            print(f"Warning: Database setup issue: {e}")
     
     # Error handlers
     @app.errorhandler(404)

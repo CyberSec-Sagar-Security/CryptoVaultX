@@ -1,7 +1,7 @@
 from functools import wraps
 from flask import jsonify, g
 from flask_jwt_extended import verify_jwt_in_request, get_jwt_identity, get_jwt
-from models import User
+from database import User
 
 def auth_required(f):
     """
@@ -25,7 +25,7 @@ def auth_required(f):
                 }), 401
 
             # Find user in database
-            current_user = User.find_by_id(current_user_id)
+            current_user = User.get_by_id(current_user_id)
             
             if not current_user:
                 return jsonify({

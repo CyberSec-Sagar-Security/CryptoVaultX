@@ -1,8 +1,8 @@
 from flask import Blueprint, request, jsonify, g
 import re
-from models import db, File, User, Share
+from database import File, User, Share, db_manager
 from middleware.auth import auth_required
-from sqlalchemy.exc import IntegrityError
+import psycopg2
 
 shares_bp = Blueprint('shares', __name__)
 

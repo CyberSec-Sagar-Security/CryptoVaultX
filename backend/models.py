@@ -86,6 +86,7 @@ class File(db.Model):
     algo = db.Column(db.String(50), nullable=True, default='AES-256-GCM')  # Encryption algorithm (nullable for unencrypted files)
     iv = db.Column(db.Text, nullable=True)  # Initialization vector (base64) - nullable for unencrypted files
     tag = db.Column(db.Text, nullable=True)  # Authentication tag (base64) - nullable for unencrypted files
+    wrapped_key = db.Column(db.Text, nullable=True)  # Wrapped file key for decryption - nullable for unencrypted files
     storage_path = db.Column(db.String(500), nullable=False)  # Server storage path
     content_type = db.Column(db.String(100), nullable=True)  # MIME type (optional)
     is_encrypted = db.Column(db.Boolean, nullable=False, default=True)  # Whether file is encrypted
@@ -118,6 +119,7 @@ class File(db.Model):
             file_dict.update({
                 'iv': self.iv,
                 'tag': self.tag,
+                'wrapped_key': self.wrapped_key,
                 'storage_path': self.storage_path,
                 'owner_id': self.owner_id
             })

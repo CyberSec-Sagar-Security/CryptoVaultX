@@ -4,9 +4,10 @@ import os
 import json
 import uuid
 import base64
-from models import db, File
+from database import File, db_manager
+from models import db
 from middleware.auth import auth_required
-from sqlalchemy.exc import IntegrityError
+import psycopg2
 
 files_bp = Blueprint('files', __name__)
 
@@ -59,6 +60,114 @@ def validate_metadata(metadata):
     
     return True, "Valid metadata"
 
+@files_bp.route('/api/files', methods=['POST'])
+@auth_required
+def upload_encrypted_file():
+    """Upload encrypted file with simplified metadata format"""
+    try:
+        # Check if file is present in request
+        if 'file' not in request.files:
+            return jsonify({'error': 'No file provided'}), 400
+        
+        file = request.files['file']
+        if file.filename == '':
+            return jsonify({'error': 'No file selected'}), 400
+        
+        # Check file size
+        file.seek(0, os.SEEK_END)
+        file_size = file.tell()
+        file.seek(0)  # Reset to beginning
+        
+        if file_size > MAX_FILE_SIZE:
+            return jsonify({'error': f'File too large. Maximum size is {MAX_FILE_SIZE // (1024*1024)}MB'}), 413
+        
+        if file_size == 0:
+            return jsonify({'error': 'Empty file not allowed'}), 400
+        
+        # Get metadata
+        metadata_str = request.form.get('metadata')
+        if not metadata_str:
+            return jsonify({'error': 'Metadata is required'}), 400
+        
+        try:
+            metadata = json.loads(metadata_str)
+        except json.JSONDecodeError:
+            return jsonify({'error': 'Invalid JSON in metadata'}), 400
+        
+        # Extract metadata fields
+        original_filename = metadata.get('originalFilename', '')
+        original_size = metadata.get('size', 0)
+        iv_base64 = metadata.get('ivBase64', '')
+        algo = metadata.get('algo', 'AES-256-GCM')
+        
+        if not original_filename:
+            return jsonify({'error': 'Original filename is required'}), 400
+        
+        if not iv_base64:
+            return jsonify({'error': 'IV is required'}), 400
+        
+        # Validate IV is valid base64
+        try:
+            base64.b64decode(iv_base64)
+        except Exception:
+            return jsonify({'error': 'IV must be valid base64'}), 400
+        
+        # Ensure filename is safe
+        secure_name = secure_filename(original_filename)
+        if not secure_name:
+            secure_name = 'unnamed_file'
+        
+        # Generate unique filename for storage
+        file_id = str(uuid.uuid4())
+        storage_filename = f"{file_id}.enc"
+        
+        # Ensure uploads directory exists
+        upload_dir = '/app/uploads'
+        os.makedirs(upload_dir, exist_ok=True)
+        
+        storage_path = os.path.join(upload_dir, storage_filename)
+        
+        # Save encrypted file to storage
+        file.save(storage_path)
+        
+        # Create file record in database
+        new_file = File(
+            id=file_id,
+            owner_id=g.current_user.id,
+            filename=secure_name,
+            size=original_size,  # Store original file size
+            algo=algo,
+            iv=iv_base64,
+            tag=iv_base64,  # For GCM, auth tag is included in ciphertext
+            wrapped_key=None,  # Session-based encryption doesn't use wrapped keys
+            storage_path=storage_path,
+            content_type='application/octet-stream',  # Encrypted files are binary
+            is_encrypted=True,
+            folder='root'
+        )
+        
+        db.session.add(new_file)
+        db.session.commit()
+        
+        return jsonify({
+            'message': 'File uploaded successfully',
+            'id': new_file.id,
+            'filename': new_file.filename,
+            'size': new_file.size,
+            'created_at': new_file.created_at.isoformat()
+        }), 201
+        
+    except Exception as e:
+        db.session.rollback()
+        # Clean up file if it was saved but DB operation failed
+        if 'storage_path' in locals() and os.path.exists(storage_path):
+            try:
+                os.remove(storage_path)
+            except:
+                pass
+        
+        return jsonify({'error': 'File upload failed', 'details': str(e)}), 500
+
 @files_bp.route('/api/files/upload', methods=['POST'])
 @auth_required
 def upload_file():
@@ -109,14 +218,18 @@ def upload_file():
             iv = encryption_data.get('iv')
             tag = encryption_data.get('tag')
             metadata = encryption_data.get('metadata', {})
+            wrapped_key = encryption_data.get('wrappedKey')
             
-            if not iv or not tag:
-                return jsonify({'error': 'IV and tag are required for encrypted files'}), 400
+            if not iv:
+                return jsonify({'error': 'IV is required for encrypted files'}), 400
             
             # Use original filename and metadata
             original_filename = metadata.get('filename', original_filename)
             content_type = metadata.get('mimeType', content_type)
             algo = metadata.get('algorithm', 'AES-256-GCM')
+            
+            # For GCM mode, tag is embedded in ciphertext, so we'll use IV for tag field
+            tag = iv
             
             # Validate base64 encoding
             try:
@@ -153,6 +266,7 @@ def upload_file():
             algo=algo,
             iv=iv,
             tag=tag,
+            wrapped_key=wrapped_key if is_encrypted else None,
             storage_path=storage_path,
             content_type=content_type,
             is_encrypted=is_encrypted,
@@ -266,11 +380,12 @@ def download_file(file_id):
         }
         
         # Add encryption metadata if file is encrypted
-        if file_record.is_encrypted and file_record.iv and file_record.tag:
+        if file_record.is_encrypted and file_record.iv:
             metadata.update({
                 'algo': file_record.algo,
                 'iv': file_record.iv,
-                'tag': file_record.tag
+                'tag': file_record.tag,
+                'wrapped_key': file_record.wrapped_key
             })
         
         response.headers['X-File-Metadata'] = json.dumps(metadata)
