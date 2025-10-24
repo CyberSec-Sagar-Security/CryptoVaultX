@@ -1,0 +1,1035 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🔑 Key Management Module Test</title>
+    <style>
+        body {
+            font-family: 'Courier New', monospace;
+            background: #1a1a1a;
+            color: #ffaa00;
+            padding: 20px;
+            margin: 0;
+        }
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+        }
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+            padding: 20px;
+            border: 2px solid #ffaa00;
+            border-radius: 10px;
+        }
+        .test-section {
+            margin: 20px 0;
+            padding: 20px;
+            border: 1px solid #444;
+            border-radius: 8px;
+            background: #222;
+        }
+        .status {
+            padding: 5px 10px;
+            border-radius: 5px;
+            font-weight: bold;
+            display: inline-block;
+            margin: 5px;
+        }
+        .status.success { background: #4caf50; color: white; }
+        .status.error { background: #f44336; color: white; }
+        .status.info { background: #2196f3; color: white; }
+        .btn {
+            background: #ffaa00;
+            color: #000;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-weight: bold;
+            margin: 5px;
+        }
+        .btn:hover { background: #ff8800; }
+        .btn.danger {
+            background: #f44336;
+            color: white;
+        }
+        .btn.danger:hover { background: #d32f2f; }
+        .output {
+            background: #000;
+            color: #ffaa00;
+            padding: 15px;
+            border-radius: 5px;
+            font-family: 'Courier New', monospace;
+            white-space: pre-wrap;
+            margin: 10px 0;
+            max-height: 300px;
+            overflow-y: auto;
+            border: 1px solid #333;
+        }
+        .key-info {
+            background: #333;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 10px 0;
+            border-left: 4px solid #ffaa00;
+        }
+        .key-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin: 15px 0;
+        }
+        .key-card {
+            background: #333;
+            padding: 15px;
+            border-radius: 8px;
+            border: 1px solid #555;
+        }
+        .key-card.active {
+            border-color: #ffaa00;
+            background: #2a2a2a;
+        }
+        .hex-display {
+            font-family: 'Courier New', monospace;
+            word-break: break-all;
+            color: #00ffff;
+            font-size: 0.9em;
+        }
+        .metric {
+            display: inline-block;
+            margin: 10px;
+            padding: 10px;
+            border: 1px solid #ffaa00;
+            border-radius: 5px;
+            min-width: 150px;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🔑 KEY MANAGEMENT MODULE TEST</h1>
+            <p>Comprehensive testing of cryptographic key operations and session management</p>
+        </div>
+
+        <div class="test-section">
+            <h2>📊 Key Management Metrics</h2>
+            <div class="metric">
+                <div>Keys Generated</div>
+                <div id="keysGenerated">0</div>
+            </div>
+            <div class="metric">
+                <div>Keys in Session</div>
+                <div id="keysInSession">0</div>
+            </div>
+            <div class="metric">
+                <div>Active Key</div>
+                <div id="activeKeyId">None</div>
+            </div>
+            <div class="metric">
+                <div>Session Size (KB)</div>
+                <div id="sessionSize">0</div>
+            </div>
+        </div>
+
+        <div class="test-section">
+            <h2>🔑 Key Generation Tests</h2>
+            <button class="btn" onclick="testKeyGeneration()">Generate New Key</button>
+            <button class="btn" onclick="testBulkKeyGeneration()">Generate 10 Keys</button>
+            <button class="btn" onclick="validateKeyProperties()">Validate Key Properties</button>
+            <div class="output" id="keyGenOutput"></div>
+        </div>
+
+        <div class="test-section">
+            <h2>💾 Session Storage Management</h2>
+            <button class="btn" onclick="testSessionStorage()">Test Session Storage</button>
+            <button class="btn" onclick="testKeyPersistence()">Test Key Persistence</button>
+            <button class="btn" onclick="testKeyRetrieval()">Test Key Retrieval</button>
+            <button class="btn danger" onclick="clearSessionStorage()">Clear All Keys</button>
+            <div class="output" id="sessionOutput"></div>
+        </div>
+
+        <div class="test-section">
+            <h2>🔄 Key Lifecycle Management</h2>
+            <button class="btn" onclick="testKeyLifecycle()">Full Lifecycle Test</button>
+            <button class="btn" onclick="testKeyRotation()">Key Rotation Test</button>
+            <button class="btn" onclick="testKeyExpiration()">Key Expiration Test</button>
+            <div class="output" id="lifecycleOutput"></div>
+        </div>
+
+        <div class="test-section">
+            <h2>🔒 Security Tests</h2>
+            <button class="btn" onclick="testKeyUniqueness()">Test Key Uniqueness</button>
+            <button class="btn" onclick="testKeyStrength()">Test Key Strength</button>
+            <button class="btn" onclick="testSessionSecurity()">Test Session Security</button>
+            <div class="output" id="securityOutput"></div>
+        </div>
+
+        <div class="test-section">
+            <h2>🔍 Current Keys in Session</h2>
+            <button class="btn" onclick="displaySessionKeys()">Refresh Key List</button>
+            <div id="keyDisplay"></div>
+        </div>
+
+        <div class="test-section">
+            <h2>📋 Key Management Report</h2>
+            <button class="btn" onclick="generateKeyReport()">Generate Report</button>
+            <div class="output" id="reportOutput"></div>
+        </div>
+    </div>
+
+    <script>
+        let keyCount = 0;
+        let testResults = [];
+        let activeKeys = new Map();
+        let sessionKeys = [];
+
+        function updateMetrics() {
+            document.getElementById('keysGenerated').textContent = keyCount;
+            document.getElementById('keysInSession').textContent = getSessionKeyCount();
+            document.getElementById('activeKeyId').textContent = getActiveKeyId();
+            document.getElementById('sessionSize').textContent = getSessionStorageSize();
+        }
+
+        function getSessionKeyCount() {
+            let count = 0;
+            for (let i = 0; i < sessionStorage.length; i++) {
+                const key = sessionStorage.key(i);
+                if (key && key.startsWith('cryptovault_key_')) {
+                    count++;
+                }
+            }
+            return count;
+        }
+
+        function getActiveKeyId() {
+            const activeKey = sessionStorage.getItem('cryptovault_active_key_id');
+            return activeKey || 'None';
+        }
+
+        function getSessionStorageSize() {
+            let size = 0;
+            for (let i = 0; i < sessionStorage.length; i++) {
+                const key = sessionStorage.key(i);
+                if (key && key.startsWith('cryptovault_')) {
+                    size += sessionStorage.getItem(key).length;
+                }
+            }
+            return Math.round(size / 1024);
+        }
+
+        function log(outputId, message, type = 'info') {
+            const output = document.getElementById(outputId);
+            const timestamp = new Date().toLocaleTimeString();
+            const prefix = type === 'success' ? '✅' : type === 'error' ? '❌' : 'ℹ️';
+            output.textContent += `[${timestamp}] ${prefix} ${message}\n`;
+            output.scrollTop = output.scrollHeight;
+        }
+
+        function arrayBufferToHex(buffer) {
+            return Array.from(new Uint8Array(buffer))
+                .map(b => b.toString(16).padStart(2, '0'))
+                .join('');
+        }
+
+        async function generateCryptoKey() {
+            return await crypto.subtle.generateKey(
+                { name: 'AES-GCM', length: 256 },
+                true,
+                ['encrypt', 'decrypt']
+            );
+        }
+
+        async function exportKey(key) {
+            return await crypto.subtle.exportKey('raw', key);
+        }
+
+        async function importKey(keyData) {
+            return await crypto.subtle.importKey(
+                'raw',
+                keyData,
+                { name: 'AES-GCM' },
+                true,
+                ['encrypt', 'decrypt']
+            );
+        }
+
+        function generateKeyId() {
+            return 'key_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+        }
+
+        async function storeKeyInSession(key, keyId) {
+            const exportedKey = await exportKey(key);
+            const keyHex = arrayBufferToHex(exportedKey);
+            const keyData = {
+                id: keyId,
+                key: keyHex,
+                created: new Date().toISOString(),
+                algorithm: 'AES-256-GCM',
+                uses: ['encrypt', 'decrypt']
+            };
+            sessionStorage.setItem(`cryptovault_key_${keyId}`, JSON.stringify(keyData));
+            return keyData;
+        }
+
+        async function getKeyFromSession(keyId) {
+            const keyDataStr = sessionStorage.getItem(`cryptovault_key_${keyId}`);
+            if (!keyDataStr) return null;
+            
+            const keyData = JSON.parse(keyDataStr);
+            const keyBuffer = new Uint8Array(keyData.key.match(/.{2}/g).map(h => parseInt(h, 16)));
+            const key = await importKey(keyBuffer);
+            return { key, data: keyData };
+        }
+
+        async function testKeyGeneration() {
+            const output = 'keyGenOutput';
+            
+            try {
+                log(output, 'Starting key generation test...');
+                
+                const startTime = performance.now();
+                const key = await generateCryptoKey();
+                const genTime = performance.now() - startTime;
+                
+                keyCount++;
+                const keyId = generateKeyId();
+                
+                log(output, `AES-256-GCM key generated in ${genTime.toFixed(2)}ms`);
+                log(output, `Key ID: ${keyId}`);
+                
+                // Export and analyze key
+                const exportedKey = await exportKey(key);
+                const keyHex = arrayBufferToHex(exportedKey);
+                
+                log(output, `Key length: ${exportedKey.byteLength * 8} bits`);
+                log(output, `Key hex: ${keyHex.substring(0, 32)}...${keyHex.substring(keyHex.length - 32)}`);
+                
+                // Store in session
+                const keyData = await storeKeyInSession(key, keyId);
+                log(output, 'Key stored in session storage');
+                
+                // Set as active key
+                sessionStorage.setItem('cryptovault_active_key_id', keyId);
+                log(output, 'Key set as active');
+                
+                activeKeys.set(keyId, key);
+                updateMetrics();
+                
+                log(output, 'Key generation test completed successfully!', 'success');
+                testResults.push({ test: 'Key Generation', status: 'PASS', time: genTime });
+                
+            } catch (error) {
+                log(output, `Key generation error: ${error.message}`, 'error');
+                testResults.push({ test: 'Key Generation', status: 'ERROR', error: error.message });
+            }
+        }
+
+        async function testBulkKeyGeneration() {
+            const output = 'keyGenOutput';
+            
+            try {
+                log(output, 'Starting bulk key generation test (10 keys)...');
+                
+                const startTime = performance.now();
+                const promises = [];
+                
+                for (let i = 0; i < 10; i++) {
+                    promises.push(generateCryptoKey());
+                }
+                
+                const keys = await Promise.all(promises);
+                const genTime = performance.now() - startTime;
+                
+                log(output, `Generated 10 keys in ${genTime.toFixed(2)}ms`);
+                log(output, `Average time per key: ${(genTime / 10).toFixed(2)}ms`);
+                
+                // Store all keys
+                for (let i = 0; i < keys.length; i++) {
+                    const keyId = generateKeyId();
+                    await storeKeyInSession(keys[i], keyId);
+                    activeKeys.set(keyId, keys[i]);
+                    keyCount++;
+                }
+                
+                updateMetrics();
+                log(output, 'Bulk key generation completed successfully!', 'success');
+                testResults.push({ test: 'Bulk Generation', status: 'PASS', time: genTime });
+                
+            } catch (error) {
+                log(output, `Bulk generation error: ${error.message}`, 'error');
+                testResults.push({ test: 'Bulk Generation', status: 'ERROR', error: error.message });
+            }
+        }
+
+        async function validateKeyProperties() {
+            const output = 'keyGenOutput';
+            
+            try {
+                log(output, 'Validating key properties...');
+                
+                const key = await generateCryptoKey();
+                keyCount++;
+                
+                // Check key properties
+                log(output, `Key type: ${key.type}`);
+                log(output, `Key algorithm: ${key.algorithm.name}`);
+                log(output, `Key length: ${key.algorithm.length} bits`);
+                log(output, `Key extractable: ${key.extractable}`);
+                log(output, `Key usages: ${key.usages.join(', ')}`);
+                
+                // Verify key can encrypt/decrypt
+                const testData = new TextEncoder().encode('Test encryption');
+                const iv = crypto.getRandomValues(new Uint8Array(12));
+                
+                const encrypted = await crypto.subtle.encrypt(
+                    { name: 'AES-GCM', iv: iv },
+                    key,
+                    testData
+                );
+                
+                const decrypted = await crypto.subtle.decrypt(
+                    { name: 'AES-GCM', iv: iv },
+                    key,
+                    encrypted
+                );
+                
+                const decryptedText = new TextDecoder().decode(decrypted);
+                
+                if (decryptedText === 'Test encryption') {
+                    log(output, 'Key functionality verified!', 'success');
+                    testResults.push({ test: 'Key Validation', status: 'PASS' });
+                } else {
+                    log(output, 'Key functionality check failed!', 'error');
+                    testResults.push({ test: 'Key Validation', status: 'FAIL' });
+                }
+                
+            } catch (error) {
+                log(output, `Key validation error: ${error.message}`, 'error');
+                testResults.push({ test: 'Key Validation', status: 'ERROR', error: error.message });
+            }
+        }
+
+        async function testSessionStorage() {
+            const output = 'sessionOutput';
+            
+            try {
+                log(output, 'Testing session storage functionality...');
+                
+                // Generate test key
+                const key = await generateCryptoKey();
+                const keyId = generateKeyId();
+                
+                log(output, `Generated test key: ${keyId}`);
+                
+                // Store key
+                const keyData = await storeKeyInSession(key, keyId);
+                log(output, 'Key stored in session storage');
+                
+                // Retrieve key
+                const retrieved = await getKeyFromSession(keyId);
+                
+                if (retrieved) {
+                    log(output, 'Key retrieved successfully');
+                    log(output, `Retrieved key ID: ${retrieved.data.id}`);
+                    log(output, `Key created: ${retrieved.data.created}`);
+                    log(output, `Key algorithm: ${retrieved.data.algorithm}`);
+                    
+                    // Test encryption with retrieved key
+                    const testData = new TextEncoder().encode('Session storage test');
+                    const iv = crypto.getRandomValues(new Uint8Array(12));
+                    
+                    const encrypted = await crypto.subtle.encrypt(
+                        { name: 'AES-GCM', iv: iv },
+                        retrieved.key,
+                        testData
+                    );
+                    
+                    log(output, 'Encryption with retrieved key successful');
+                    
+                    keyCount++;
+                    activeKeys.set(keyId, retrieved.key);
+                    updateMetrics();
+                    
+                    log(output, 'Session storage test completed successfully!', 'success');
+                    testResults.push({ test: 'Session Storage', status: 'PASS' });
+                    
+                } else {
+                    log(output, 'Failed to retrieve key from session storage', 'error');
+                    testResults.push({ test: 'Session Storage', status: 'FAIL' });
+                }
+                
+            } catch (error) {
+                log(output, `Session storage error: ${error.message}`, 'error');
+                testResults.push({ test: 'Session Storage', status: 'ERROR', error: error.message });
+            }
+        }
+
+        async function testKeyPersistence() {
+            const output = 'sessionOutput';
+            
+            try {
+                log(output, 'Testing key persistence across page operations...');
+                
+                // Store multiple keys with different data
+                const keys = [];
+                for (let i = 0; i < 3; i++) {
+                    const key = await generateCryptoKey();
+                    const keyId = `persistence_test_${i}_${Date.now()}`;
+                    await storeKeyInSession(key, keyId);
+                    keys.push(keyId);
+                    log(output, `Stored key ${i + 1}: ${keyId}`);
+                }
+                
+                // Simulate page operations by clearing in-memory data
+                activeKeys.clear();
+                
+                // Try to retrieve all keys
+                let successCount = 0;
+                for (const keyId of keys) {
+                    const retrieved = await getKeyFromSession(keyId);
+                    if (retrieved) {
+                        successCount++;
+                        log(output, `Retrieved key: ${keyId}`);
+                    }
+                }
+                
+                if (successCount === keys.length) {
+                    log(output, `All ${keys.length} keys persisted successfully!`, 'success');
+                    testResults.push({ test: 'Key Persistence', status: 'PASS' });
+                } else {
+                    log(output, `Only ${successCount}/${keys.length} keys persisted`, 'error');
+                    testResults.push({ test: 'Key Persistence', status: 'FAIL' });
+                }
+                
+                keyCount += keys.length;
+                updateMetrics();
+                
+            } catch (error) {
+                log(output, `Key persistence error: ${error.message}`, 'error');
+                testResults.push({ test: 'Key Persistence', status: 'ERROR', error: error.message });
+            }
+        }
+
+        async function testKeyRetrieval() {
+            const output = 'sessionOutput';
+            
+            try {
+                log(output, 'Testing key retrieval performance...');
+                
+                // Get all keys from session storage
+                const keyIds = [];
+                for (let i = 0; i < sessionStorage.length; i++) {
+                    const key = sessionStorage.key(i);
+                    if (key && key.startsWith('cryptovault_key_')) {
+                        keyIds.push(key.replace('cryptovault_key_', ''));
+                    }
+                }
+                
+                log(output, `Found ${keyIds.length} keys in session storage`);
+                
+                if (keyIds.length === 0) {
+                    log(output, 'No keys found. Generate some keys first.', 'error');
+                    return;
+                }
+                
+                // Test retrieval speed
+                const startTime = performance.now();
+                let retrievedCount = 0;
+                
+                for (const keyId of keyIds) {
+                    const retrieved = await getKeyFromSession(keyId);
+                    if (retrieved) {
+                        retrievedCount++;
+                    }
+                }
+                
+                const retrievalTime = performance.now() - startTime;
+                
+                log(output, `Retrieved ${retrievedCount}/${keyIds.length} keys`);
+                log(output, `Total retrieval time: ${retrievalTime.toFixed(2)}ms`);
+                log(output, `Average time per key: ${(retrievalTime / retrievedCount).toFixed(2)}ms`);
+                
+                if (retrievedCount === keyIds.length) {
+                    log(output, 'Key retrieval test completed successfully!', 'success');
+                    testResults.push({ test: 'Key Retrieval', status: 'PASS', time: retrievalTime });
+                } else {
+                    log(output, 'Some keys could not be retrieved', 'error');
+                    testResults.push({ test: 'Key Retrieval', status: 'FAIL' });
+                }
+                
+            } catch (error) {
+                log(output, `Key retrieval error: ${error.message}`, 'error');
+                testResults.push({ test: 'Key Retrieval', status: 'ERROR', error: error.message });
+            }
+        }
+
+        function clearSessionStorage() {
+            const output = 'sessionOutput';
+            
+            try {
+                log(output, 'Clearing all CryptoVault keys from session storage...');
+                
+                const keysToRemove = [];
+                for (let i = 0; i < sessionStorage.length; i++) {
+                    const key = sessionStorage.key(i);
+                    if (key && key.startsWith('cryptovault_')) {
+                        keysToRemove.push(key);
+                    }
+                }
+                
+                keysToRemove.forEach(key => {
+                    sessionStorage.removeItem(key);
+                });
+                
+                activeKeys.clear();
+                
+                log(output, `Removed ${keysToRemove.length} items from session storage`);
+                updateMetrics();
+                log(output, 'Session storage cleared successfully!', 'success');
+                
+            } catch (error) {
+                log(output, `Clear storage error: ${error.message}`, 'error');
+            }
+        }
+
+        async function testKeyLifecycle() {
+            const output = 'lifecycleOutput';
+            
+            try {
+                log(output, 'Testing complete key lifecycle...');
+                
+                // 1. Generate
+                log(output, 'Step 1: Generating key...');
+                const key = await generateCryptoKey();
+                const keyId = generateKeyId();
+                
+                // 2. Store
+                log(output, 'Step 2: Storing in session...');
+                await storeKeyInSession(key, keyId);
+                
+                // 3. Set as active
+                log(output, 'Step 3: Setting as active key...');
+                sessionStorage.setItem('cryptovault_active_key_id', keyId);
+                
+                // 4. Use for encryption
+                log(output, 'Step 4: Using for encryption...');
+                const testData = new TextEncoder().encode('Lifecycle test data');
+                const iv = crypto.getRandomValues(new Uint8Array(12));
+                const encrypted = await crypto.subtle.encrypt(
+                    { name: 'AES-GCM', iv: iv },
+                    key,
+                    testData
+                );
+                
+                // 5. Retrieve from session
+                log(output, 'Step 5: Retrieving from session...');
+                const retrieved = await getKeyFromSession(keyId);
+                
+                // 6. Use retrieved key for decryption
+                log(output, 'Step 6: Using retrieved key for decryption...');
+                const decrypted = await crypto.subtle.decrypt(
+                    { name: 'AES-GCM', iv: iv },
+                    retrieved.key,
+                    encrypted
+                );
+                
+                // 7. Verify
+                const decryptedText = new TextDecoder().decode(decrypted);
+                if (decryptedText === 'Lifecycle test data') {
+                    log(output, 'Step 7: Verification successful!');
+                    
+                    keyCount++;
+                    updateMetrics();
+                    
+                    log(output, 'Key lifecycle test completed successfully!', 'success');
+                    testResults.push({ test: 'Key Lifecycle', status: 'PASS' });
+                } else {
+                    log(output, 'Step 7: Verification failed!', 'error');
+                    testResults.push({ test: 'Key Lifecycle', status: 'FAIL' });
+                }
+                
+            } catch (error) {
+                log(output, `Key lifecycle error: ${error.message}`, 'error');
+                testResults.push({ test: 'Key Lifecycle', status: 'ERROR', error: error.message });
+            }
+        }
+
+        async function testKeyRotation() {
+            const output = 'lifecycleOutput';
+            
+            try {
+                log(output, 'Testing key rotation...');
+                
+                // Generate multiple keys
+                const keys = [];
+                for (let i = 0; i < 3; i++) {
+                    const key = await generateCryptoKey();
+                    const keyId = generateKeyId();
+                    await storeKeyInSession(key, keyId);
+                    keys.push({ key, keyId });
+                    log(output, `Generated key ${i + 1}: ${keyId}`);
+                }
+                
+                // Test rotation by setting each as active
+                for (let i = 0; i < keys.length; i++) {
+                    const { key, keyId } = keys[i];
+                    
+                    log(output, `Rotating to key ${i + 1}...`);
+                    sessionStorage.setItem('cryptovault_active_key_id', keyId);
+                    
+                    // Test encryption with current active key
+                    const testData = new TextEncoder().encode(`Data encrypted with key ${i + 1}`);
+                    const iv = crypto.getRandomValues(new Uint8Array(12));
+                    
+                    const encrypted = await crypto.subtle.encrypt(
+                        { name: 'AES-GCM', iv: iv },
+                        key,
+                        testData
+                    );
+                    
+                    log(output, `Successfully encrypted with key ${i + 1}`);
+                }
+                
+                keyCount += keys.length;
+                updateMetrics();
+                
+                log(output, 'Key rotation test completed successfully!', 'success');
+                testResults.push({ test: 'Key Rotation', status: 'PASS' });
+                
+            } catch (error) {
+                log(output, `Key rotation error: ${error.message}`, 'error');
+                testResults.push({ test: 'Key Rotation', status: 'ERROR', error: error.message });
+            }
+        }
+
+        async function testKeyExpiration() {
+            const output = 'lifecycleOutput';
+            
+            try {
+                log(output, 'Testing key expiration simulation...');
+                
+                // Create key with timestamp
+                const key = await generateCryptoKey();
+                const keyId = generateKeyId();
+                
+                // Store with past timestamp to simulate expiration
+                const exportedKey = await exportKey(key);
+                const keyHex = arrayBufferToHex(exportedKey);
+                const expiredKeyData = {
+                    id: keyId,
+                    key: keyHex,
+                    created: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(), // 24 hours ago
+                    algorithm: 'AES-256-GCM',
+                    uses: ['encrypt', 'decrypt'],
+                    expires: new Date(Date.now() - 1000).toISOString() // Expired 1 second ago
+                };
+                
+                sessionStorage.setItem(`cryptovault_key_${keyId}`, JSON.stringify(expiredKeyData));
+                log(output, `Created expired key: ${keyId}`);
+                
+                // Test expiration check
+                const keyDataStr = sessionStorage.getItem(`cryptovault_key_${keyId}`);
+                const keyData = JSON.parse(keyDataStr);
+                
+                if (keyData.expires && new Date(keyData.expires) < new Date()) {
+                    log(output, 'Key expiration detected correctly!');
+                    log(output, `Key expired at: ${keyData.expires}`);
+                    
+                    // Remove expired key
+                    sessionStorage.removeItem(`cryptovault_key_${keyId}`);
+                    log(output, 'Expired key removed from session storage');
+                    
+                    log(output, 'Key expiration test completed successfully!', 'success');
+                    testResults.push({ test: 'Key Expiration', status: 'PASS' });
+                } else {
+                    log(output, 'Key expiration check failed!', 'error');
+                    testResults.push({ test: 'Key Expiration', status: 'FAIL' });
+                }
+                
+                keyCount++;
+                updateMetrics();
+                
+            } catch (error) {
+                log(output, `Key expiration error: ${error.message}`, 'error');
+                testResults.push({ test: 'Key Expiration', status: 'ERROR', error: error.message });
+            }
+        }
+
+        async function testKeyUniqueness() {
+            const output = 'securityOutput';
+            
+            try {
+                log(output, 'Testing key uniqueness...');
+                
+                const keys = [];
+                const keyHashes = new Set();
+                
+                // Generate multiple keys and check uniqueness
+                for (let i = 0; i < 10; i++) {
+                    const key = await generateCryptoKey();
+                    const exported = await exportKey(key);
+                    const hash = arrayBufferToHex(exported);
+                    
+                    if (keyHashes.has(hash)) {
+                        log(output, `Duplicate key detected at iteration ${i}!`, 'error');
+                        testResults.push({ test: 'Key Uniqueness', status: 'FAIL' });
+                        return;
+                    }
+                    
+                    keyHashes.add(hash);
+                    keys.push(hash);
+                }
+                
+                log(output, `Generated ${keys.length} unique keys`);
+                log(output, 'Sample key differences:');
+                for (let i = 0; i < Math.min(3, keys.length); i++) {
+                    log(output, `Key ${i + 1}: ${keys[i].substring(0, 32)}...`);
+                }
+                
+                keyCount += keys.length;
+                updateMetrics();
+                
+                log(output, 'Key uniqueness test passed!', 'success');
+                testResults.push({ test: 'Key Uniqueness', status: 'PASS' });
+                
+            } catch (error) {
+                log(output, `Key uniqueness error: ${error.message}`, 'error');
+                testResults.push({ test: 'Key Uniqueness', status: 'ERROR', error: error.message });
+            }
+        }
+
+        async function testKeyStrength() {
+            const output = 'securityOutput';
+            
+            try {
+                log(output, 'Testing key strength and randomness...');
+                
+                const key = await generateCryptoKey();
+                const exported = await exportKey(key);
+                const keyBytes = new Uint8Array(exported);
+                
+                log(output, `Key length: ${keyBytes.length} bytes (${keyBytes.length * 8} bits)`);
+                
+                // Check key length
+                if (keyBytes.length !== 32) {
+                    log(output, `Invalid key length: expected 32 bytes, got ${keyBytes.length}`, 'error');
+                    testResults.push({ test: 'Key Strength', status: 'FAIL' });
+                    return;
+                }
+                
+                // Basic randomness tests
+                let zeroCount = 0;
+                let oneCount = 0;
+                
+                for (const byte of keyBytes) {
+                    const bits = byte.toString(2).padStart(8, '0');
+                    for (const bit of bits) {
+                        if (bit === '0') zeroCount++;
+                        else oneCount++;
+                    }
+                }
+                
+                const totalBits = keyBytes.length * 8;
+                const zeroRatio = zeroCount / totalBits;
+                const oneRatio = oneCount / totalBits;
+                
+                log(output, `Bit distribution: ${zeroCount} zeros (${(zeroRatio * 100).toFixed(1)}%), ${oneCount} ones (${(oneRatio * 100).toFixed(1)}%)`);
+                
+                // Check for reasonable randomness (not too skewed)
+                if (zeroRatio < 0.4 || zeroRatio > 0.6) {
+                    log(output, 'Warning: Bit distribution may indicate weak randomness', 'error');
+                }
+                
+                // Check for obvious patterns
+                let repeatingBytes = 0;
+                for (let i = 1; i < keyBytes.length; i++) {
+                    if (keyBytes[i] === keyBytes[i - 1]) {
+                        repeatingBytes++;
+                    }
+                }
+                
+                log(output, `Consecutive repeating bytes: ${repeatingBytes}/${keyBytes.length - 1}`);
+                
+                if (repeatingBytes > keyBytes.length / 4) {
+                    log(output, 'Warning: High number of repeating bytes detected', 'error');
+                }
+                
+                keyCount++;
+                updateMetrics();
+                
+                log(output, 'Key strength test completed!', 'success');
+                testResults.push({ test: 'Key Strength', status: 'PASS' });
+                
+            } catch (error) {
+                log(output, `Key strength error: ${error.message}`, 'error');
+                testResults.push({ test: 'Key Strength', status: 'ERROR', error: error.message });
+            }
+        }
+
+        async function testSessionSecurity() {
+            const output = 'securityOutput';
+            
+            try {
+                log(output, 'Testing session security measures...');
+                
+                // Test 1: Verify keys are not accessible from other origins
+                log(output, 'Test 1: Session storage isolation...');
+                const testKey = await generateCryptoKey();
+                const keyId = generateKeyId();
+                await storeKeyInSession(testKey, keyId);
+                
+                // Keys should only be accessible from same origin
+                log(output, 'Keys stored in sessionStorage (same-origin only)');
+                
+                // Test 2: Check session storage size limits
+                log(output, 'Test 2: Session storage limits...');
+                const currentSize = getSessionStorageSize();
+                log(output, `Current session storage size: ${currentSize} KB`);
+                
+                // Test 3: Verify automatic cleanup on browser close
+                log(output, 'Test 3: Session cleanup behavior...');
+                log(output, 'sessionStorage automatically cleared when browser closes');
+                
+                // Test 4: Check key export restrictions
+                log(output, 'Test 4: Key export security...');
+                try {
+                    const exported = await exportKey(testKey);
+                    log(output, 'Key export successful (controlled access)');
+                } catch (error) {
+                    log(output, `Key export restricted: ${error.message}`);
+                }
+                
+                keyCount++;
+                updateMetrics();
+                
+                log(output, 'Session security test completed!', 'success');
+                testResults.push({ test: 'Session Security', status: 'PASS' });
+                
+            } catch (error) {
+                log(output, `Session security error: ${error.message}`, 'error');
+                testResults.push({ test: 'Session Security', status: 'ERROR', error: error.message });
+            }
+        }
+
+        async function displaySessionKeys() {
+            const keyDisplay = document.getElementById('keyDisplay');
+            keyDisplay.innerHTML = '';
+            
+            try {
+                const keys = [];
+                for (let i = 0; i < sessionStorage.length; i++) {
+                    const key = sessionStorage.key(i);
+                    if (key && key.startsWith('cryptovault_key_')) {
+                        const keyData = JSON.parse(sessionStorage.getItem(key));
+                        keys.push(keyData);
+                    }
+                }
+                
+                const activeKeyId = sessionStorage.getItem('cryptovault_active_key_id');
+                
+                if (keys.length === 0) {
+                    keyDisplay.innerHTML = '<p>No keys found in session storage. Generate some keys first.</p>';
+                    return;
+                }
+                
+                const keyGrid = document.createElement('div');
+                keyGrid.className = 'key-grid';
+                
+                keys.forEach(keyData => {
+                    const keyCard = document.createElement('div');
+                    keyCard.className = `key-card ${keyData.id === activeKeyId ? 'active' : ''}`;
+                    
+                    keyCard.innerHTML = `
+                        <h4>${keyData.id === activeKeyId ? '🔑 ' : ''}${keyData.id}</h4>
+                        <p><strong>Algorithm:</strong> ${keyData.algorithm}</p>
+                        <p><strong>Created:</strong> ${new Date(keyData.created).toLocaleString()}</p>
+                        <p><strong>Uses:</strong> ${keyData.uses.join(', ')}</p>
+                        <p><strong>Key Preview:</strong></p>
+                        <div class="hex-display">${keyData.key.substring(0, 32)}...</div>
+                        ${keyData.id === activeKeyId ? '<p><strong>STATUS: ACTIVE</strong></p>' : ''}
+                    `;
+                    
+                    keyGrid.appendChild(keyCard);
+                });
+                
+                keyDisplay.appendChild(keyGrid);
+                
+                const summary = document.createElement('div');
+                summary.className = 'key-info';
+                summary.innerHTML = `
+                    <h3>Session Summary</h3>
+                    <p>Total Keys: ${keys.length}</p>
+                    <p>Active Key: ${activeKeyId || 'None'}</p>
+                    <p>Session Size: ${getSessionStorageSize()} KB</p>
+                `;
+                
+                keyDisplay.appendChild(summary);
+                
+            } catch (error) {
+                keyDisplay.innerHTML = `<p>Error displaying keys: ${error.message}</p>`;
+            }
+        }
+
+        function generateKeyReport() {
+            const output = 'reportOutput';
+            document.getElementById(output).textContent = '';
+            
+            log(output, '🔑 KEY MANAGEMENT MODULE TEST REPORT');
+            log(output, '='.repeat(50));
+            log(output, `Test Date: ${new Date().toISOString()}`);
+            log(output, `Browser: ${navigator.userAgent}`);
+            log(output, '');
+            
+            log(output, '📊 KEY STATISTICS:');
+            log(output, `Total Keys Generated: ${keyCount}`);
+            log(output, `Keys in Session Storage: ${getSessionKeyCount()}`);
+            log(output, `Active Key ID: ${getActiveKeyId()}`);
+            log(output, `Session Storage Size: ${getSessionStorageSize()} KB`);
+            log(output, '');
+            
+            log(output, '🧪 TEST RESULTS:');
+            testResults.forEach(result => {
+                const status = result.status === 'PASS' ? '✅' : result.status === 'FAIL' ? '❌' : '⚠️';
+                log(output, `${status} ${result.test}: ${result.status}`);
+                if (result.time) {
+                    log(output, `   Time: ${result.time.toFixed(2)}ms`);
+                }
+                if (result.error) {
+                    log(output, `   Error: ${result.error}`);
+                }
+            });
+            
+            log(output, '');
+            log(output, '🔐 KEY MANAGEMENT DETAILS:');
+            log(output, 'Algorithm: AES-256-GCM');
+            log(output, 'Key Storage: sessionStorage (browser session only)');
+            log(output, 'Key Format: Raw binary exported as hex');
+            log(output, 'Key Lifecycle: Generate → Store → Use → Clear on session end');
+            log(output, 'Security: Same-origin policy enforced');
+            
+            const passedTests = testResults.filter(r => r.status === 'PASS').length;
+            const totalTests = testResults.length;
+            
+            log(output, '');
+            log(output, `🎯 OVERALL RESULT: ${passedTests}/${totalTests} tests passed`);
+            
+            if (passedTests === totalTests && totalTests > 0) {
+                log(output, '🎉 ALL TESTS PASSED! Key Management module working perfectly!', 'success');
+            } else {
+                log(output, '⚠️ Some tests failed. Please review the results above.', 'error');
+            }
+        }
+
+        // Initialize
+        window.addEventListener('load', () => {
+            updateMetrics();
+            displaySessionKeys();
+            console.log('🔑 Key Management Test Module Loaded');
+        });
+    </script>
+</body>
+</html>

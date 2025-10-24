@@ -1,0 +1,32 @@
+{
+  "testData": {
+    "name": "CryptoVault Test Configuration",
+    "version": "1.0",
+    "algorithms": ["AES-256-GCM"],
+    "keyLengths": [256],
+    "testFiles": [
+      "sample-document.txt",
+      "binary-test.json"
+    ]
+  },
+  "encryptionParameters": {
+    "algorithm": "AES-GCM",
+    "keyLength": 256,
+    "ivLength": 12,
+    "tagLength": 16
+  },
+  "expectedResults": {
+    "encryption": "success",
+    "decryption": "success",
+    "integrityCheck": "passed"
+  },
+  "metadata": {
+    "created": "2025-10-24",
+    "purpose": "Professor demonstration",
+    "features": [
+      "Client-side encryption",
+      "Secure key management",
+      "File upload with encryption"
+    ]
+  }
+}

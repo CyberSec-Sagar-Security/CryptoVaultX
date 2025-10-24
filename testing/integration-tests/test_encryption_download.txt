@@ -1,0 +1,10 @@
+This is a test file for encryption and download verification.
+It contains multiple lines to test the complete encryption workflow.
+
+Content includes:
+- Plain text
+- Numbers: 123456789
+- Special characters: !@#$%^&*()
+- Unicode: 🔐🚀✨
+
+This file should be encrypted client-side before upload and properly decrypted during download.

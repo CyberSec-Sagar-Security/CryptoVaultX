@@ -1,0 +1,10 @@
+This is a test file for CryptoVaultX encryption testing.
+It contains some sample text to verify that our local storage encryption system works correctly.
+
+Test data:
+- Line 1: Hello World
+- Line 2: Testing 123
+- Line 3: Encryption Test
+- Line 4: Final line
+
+This file should be encrypted and stored locally in the browser's localStorage system.

@@ -1,0 +1,18 @@
+This is a sample text file for encryption testing.
+
+Content includes:
+- Plain text paragraphs
+- Numbers: 1234567890
+- Special characters: !@#$%^&*()_+-=[]{}|;:,.<>?
+- Unicode characters: 🔐🚀✨💻🛡️
+
+This file will be encrypted using AES-256-GCM algorithm.
+The encryption should preserve all content perfectly.
+
+Test data for professor demonstration:
+- Original file size: [will be calculated]
+- Encryption algorithm: AES-256-GCM
+- Key size: 256 bits
+- IV size: 96 bits (12 bytes)
+
+End of test file.
