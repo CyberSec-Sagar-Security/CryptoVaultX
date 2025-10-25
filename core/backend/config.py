@@ -5,7 +5,7 @@ class Config:
     """Base configuration class"""
     SECRET_KEY = os.environ.get('SECRET_KEY') or 'dev-secret-key-change-in-production'
     # Database connection (updated to requested credentials)
-    SQLALCHEMY_DATABASE_URI = os.environ.get('DATABASE_URL') or 'postgresql://cryptovault_user:sql123@localhost:5432/cryptovault_db'
+    SQLALCHEMY_DATABASE_URI = os.environ.get('DATABASE_URL') or 'postgresql://postgres:sql123@localhost:5432/cryptovault_db'
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     
     # JWT Configuration

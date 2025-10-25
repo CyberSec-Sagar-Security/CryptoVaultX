@@ -213,23 +213,46 @@ const Upload: React.FC = () => {
         throw new Error('Only encrypted uploads are supported in this implementation');
       }
 
-      // Encryption and local storage phase
+      // Step 1: Client-side encryption
       updateFile({ status: 'encrypting', progress: 10 });
-      console.log(`Starting local encryption and storage for file: ${fileUpload.file.name}`);
+      console.log(`Starting encryption for file: ${fileUpload.file.name}`);
       
+      const encryptedData = await encryptFileForUpload(fileUpload.file, fileUpload.encryptionLevel);
       updateFile({ progress: 30 });
       
-      // Upload to local storage
+      // Step 2: Upload to backend
       updateFile({ status: 'uploading', progress: 50 });
       
-      const result = await uploadFileLocally(fileUpload.file, {
-        encryptionLevel: fileUpload.encryptionLevel,
-        deleteAfterUpload: uploadSettings.deleteAfterUpload
+      // Prepare form data
+      const formData = new FormData();
+      
+      // Add encrypted file
+      formData.append('file', encryptedData.ciphertextBlob, `${fileUpload.file.name}.enc`);
+      
+      // Add metadata
+      const metadata = {
+        originalFilename: encryptedData.metadata.originalFilename,
+        ivBase64: encryptedData.metadata.ivBase64,
+        algo: encryptedData.metadata.algo,
+        encryptionLevel: encryptedData.metadata.encryptionLevel
+      };
+      formData.append('metadata', JSON.stringify(metadata));
+      
+      // Upload to backend API
+      const response = await apiRequest('/files', {
+        method: 'POST',
+        body: formData
       });
       
       updateFile({ progress: 90 });
       
-      console.log(`Local upload successful. File ID: ${result.fileId}, Path: ${result.encryptedPath}`);
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Upload failed');
+      }
+      
+      const result = await response.json();
+      console.log(`Backend upload successful. File ID: ${result.id}`);
 
       updateFile({ progress: 95 });
       await new Promise(resolve => setTimeout(resolve, 500));
@@ -237,7 +260,7 @@ const Upload: React.FC = () => {
 
       // Dispatch custom event to notify other components about successful upload
       window.dispatchEvent(new CustomEvent('fileUploaded', { 
-        detail: { fileId: result.fileId, filename: result.filename, storage: 'local' } 
+        detail: { fileId: result.id, filename: result.original_filename, storage: 'backend' } 
       }));
 
     } catch (error) {

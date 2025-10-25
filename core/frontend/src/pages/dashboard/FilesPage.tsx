@@ -55,6 +55,7 @@ import {
   downloadFileLocally,
   deleteFileLocally
 } from '../../lib/localFileStorage';
+import { downloadFileEnhanced } from '../../lib/enhancedDownload';
 
 interface FileItem {
   id: string;
@@ -68,12 +69,13 @@ interface FileItem {
   updated_at?: string;
   iv?: string;
   tag?: string;
+  errorMessage?: string;
 }
 
 interface DownloadProgress {
   fileId: string;
   progress: number;
-  status: 'downloading' | 'decrypting' | 'completed' | 'error';
+  status: 'starting' | 'downloading' | 'processing' | 'decrypting' | 'saving' | 'completed' | 'error';
   error?: string;
 }
 
@@ -86,32 +88,39 @@ const FilesPage: React.FC = () => {
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('list');
   const [downloadProgress, setDownloadProgress] = useState<Map<string, DownloadProgress>>(new Map());
 
-  // Fetch files from local storage
+  // Fetch files from backend API
   const fetchFiles = async () => {
     try {
       setLoading(true);
       setError(null);
       
-      // Get files from local storage
-      const localFiles = await listLocalFiles();
-      
-      // Try to get files from API as fallback/additional source
-      let apiFiles: any[] = [];
-      try {
-        const response = await apiRequest('/files');
-        apiFiles = response.files || [];
-      } catch (apiError) {
-        console.warn('API not available, using local files only:', apiError);
+      // Get files from backend API
+      const response = await apiRequest('/files/list');
+      if (!response.ok) {
+        throw new Error('Failed to fetch files from server');
       }
       
-      // Combine local and API files, prioritizing local files
-      const allFiles = [
-        ...localFiles,
-        ...apiFiles.filter(apiFile => !localFiles.some(localFile => localFile.filename === apiFile.filename))
-      ];
+      const data = await response.json();
+      const apiFiles = data.files || [];
       
-      setFiles(allFiles);
+      // Convert API response to FileItem format
+      const formattedFiles: FileItem[] = apiFiles.map((file: any) => ({
+        id: file.id,
+        filename: file.original_filename,
+        size: file.size_bytes,
+        created_at: file.created_at,
+        content_type: file.content_type,
+        storage: 'backend',
+        encryption: {
+          level: 'HIGH', // Default since backend uses AES-256-GCM
+          iv: file.iv,
+          algorithm: file.algo
+        }
+      }));
+      
+      setFiles(formattedFiles);
     } catch (err) {
+      console.error('Error fetching files:', err);
       setError(err instanceof Error ? err.message : 'Failed to fetch files');
     } finally {
       setLoading(false);
@@ -188,124 +197,83 @@ const FilesPage: React.FC = () => {
     return date.toLocaleDateString();
   };
 
-  // Download and decrypt file (local or remote)
+  // Download and decrypt file from backend
   const downloadFile = async (file: FileItem) => {
     const progressKey = file.id;
     
     try {
-      // Initialize progress tracking
+      // Set initial progress
       setDownloadProgress(prev => new Map(prev.set(progressKey, {
         fileId: file.id,
         progress: 0,
+        status: 'starting'
+      })));
+      
+      // Step 1: Download encrypted file from backend
+      setDownloadProgress(prev => new Map(prev.set(progressKey, {
+        fileId: file.id,
+        progress: 20,
         status: 'downloading'
       })));
-
-      // Check if file is stored locally
-      if ((file as any).storage_type === 'local') {
-        // Use local download
-        setDownloadProgress(prev => new Map(prev.set(progressKey, {
-          fileId: file.id,
-          progress: 50,
-          status: 'decrypting'
-        })));
-        
-        await downloadFileLocally(file.id);
-        
-        setDownloadProgress(prev => new Map(prev.set(progressKey, {
-          fileId: file.id,
-          progress: 100,
-          status: 'completed'
-        })));
-      } else {
-        // Use remote download from backend API
-        const response = await fetch(`/api/files/${file.id}`, {
-          headers: {
-            'Authorization': `Bearer ${localStorage.getItem('access_token')}`
-          }
-        });
-
-        if (!response.ok) {
-          throw new Error(`Download failed: ${response.status} ${response.statusText}`);
-        }
-
-        setDownloadProgress(prev => new Map(prev.set(progressKey, {
-          fileId: file.id,
-          progress: 30,
-          status: 'downloading'
-        })));
-
-        // Get metadata from response headers
-        const metadataHeader = response.headers.get('X-File-Metadata');
-        const metadata = metadataHeader ? JSON.parse(metadataHeader) : {};
-        
-        const fileBlob = await response.blob();
-
-        setDownloadProgress(prev => new Map(prev.set(progressKey, {
-          fileId: file.id,
-          progress: 50,
-          status: file.is_encrypted ? 'decrypting' : 'completed'
-        })));
-
-        if (file.is_encrypted) {
-          // Get session key for decryption (session-based encryption)
-          const sessionKey = await getSessionKey();
-
-          // Get the IV from metadata or file record
-          const ivBase64 = metadata.iv || file.iv;
-          if (!ivBase64) {
-            throw new Error('Encryption IV not found. File may not be properly encrypted.');
-          }
-
-          console.log(`Starting decryption for file: ${file.filename}, IV: ${ivBase64.substring(0, 16)}...`);
-
-          setDownloadProgress(prev => new Map(prev.set(progressKey, {
-            fileId: file.id,
-            progress: 70,
-            status: 'decrypting'
-          })));
-
-          // Convert IV from base64 to ArrayBuffer
-          const ivBuffer = base64ToArrayBuffer(ivBase64);
-
-          // Get encrypted file data as ArrayBuffer
-          const encryptedBuffer = await fileBlob.arrayBuffer();
-
-          setDownloadProgress(prev => new Map(prev.set(progressKey, {
-            fileId: file.id,
-            progress: 90,
-            status: 'decrypting'
-          })));
-
-          // Decrypt file using session key
-          const decryptedBuffer = await decryptFile(encryptedBuffer, ivBuffer, sessionKey);
-          
-          console.log(`Decryption complete for file: ${file.filename}, decrypted size: ${decryptedBuffer.byteLength} bytes`);
-          
-          // Create blob and download decrypted file
-          const decryptedBlob = new Blob([decryptedBuffer], {
-            type: file.content_type || 'application/octet-stream'
-          });
-          
-          const url = URL.createObjectURL(decryptedBlob);
-          const a = document.createElement('a');
-          a.href = url;
-          a.download = metadata.filename || file.filename;
-          document.body.appendChild(a);
-          a.click();
-          document.body.removeChild(a);
-          URL.revokeObjectURL(url);
-        } else {
-          // Direct download for unencrypted files
-          const url = URL.createObjectURL(fileBlob);
-          const a = document.createElement('a');
-          a.href = url;
-          a.download = metadata.filename || file.filename;
-          document.body.appendChild(a);
-          a.click();
-          document.body.removeChild(a);
-          URL.revokeObjectURL(url);
-        }
+      
+      const response = await apiRequest(`/files/${file.id}`, {
+        method: 'GET'
+      });
+      
+      if (!response.ok) {
+        throw new Error('Failed to download file from server');
       }
+      
+      // Step 2: Get file data and metadata from headers
+      const encryptedData = await response.arrayBuffer();
+      const fileName = response.headers.get('X-File-Name') || file.filename;
+      const iv = response.headers.get('X-File-IV');
+      const algo = response.headers.get('X-File-Algo') || 'AES-256-GCM';
+      
+      if (!iv) {
+        throw new Error('Missing encryption metadata');
+      }
+      
+      setDownloadProgress(prev => new Map(prev.set(progressKey, {
+        fileId: file.id,
+        progress: 50,
+        status: 'decrypting'
+      })));
+      
+      // Step 3: Decrypt file using session key
+      const sessionKey = await getSessionKey('HIGH');
+      const decryptedData = await decryptFile(
+        encryptedData,
+        base64ToArrayBuffer(iv),
+        sessionKey,
+        'HIGH'
+      );
+      
+      setDownloadProgress(prev => new Map(prev.set(progressKey, {
+        fileId: file.id,
+        progress: 80,
+        status: 'saving'
+      })));
+      
+      // Step 4: Create and download file
+      const blob = new Blob([decryptedData], { type: file.content_type || 'application/octet-stream' });
+      const url = URL.createObjectURL(blob);
+      
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = fileName;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      
+      setDownloadProgress(prev => new Map(prev.set(progressKey, {
+        fileId: file.id,
+        progress: 100,
+        status: 'completed'
+      })));
+      
+      console.log(`✅ File downloaded and decrypted: ${fileName}`);
 
       // Remove progress after delay
       setTimeout(() => {
@@ -318,12 +286,38 @@ const FilesPage: React.FC = () => {
 
     } catch (error) {
       console.error('Download error:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Download failed';
+      
+      setDownloadProgress(prev => new Map(prev.set(progressKey, {
+        fileId: file.id,
+        progress: 0,
+        status: 'error'
+      })));
+      
+      // Remove error progress after delay
+      setTimeout(() => {
+        setDownloadProgress(prev => {
+          const newMap = new Map(prev);
+          newMap.delete(progressKey);
+          return newMap;
+        });
+      }, 5000);
+    }
+  };
+      
       setDownloadProgress(prev => new Map(prev.set(progressKey, {
         fileId: file.id,
         progress: 0,
         status: 'error',
-        error: error instanceof Error ? error.message : 'Download failed'
+        error: errorMessage
       })));
+      
+      // Show user-friendly error notification
+      setFiles(prev => prev.map(f => 
+        f.id === file.id 
+          ? { ...f, errorMessage: errorMessage }
+          : f
+      ));
       
       // Remove error after delay
       setTimeout(() => {
@@ -332,7 +326,14 @@ const FilesPage: React.FC = () => {
           newMap.delete(progressKey);
           return newMap;
         });
-      }, 5000);
+        
+        // Clear error message from file
+        setFiles(prev => prev.map(f => 
+          f.id === file.id 
+            ? { ...f, errorMessage: undefined }
+            : f
+        ));
+      }, 8000);
     }
   };
 

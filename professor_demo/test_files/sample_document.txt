@@ -1,0 +1,11 @@
+This is a sample text file for testing CryptoVaultX encryption and decryption functionality.
+
+Contents:
+- Original text that should be encrypted before upload
+- Should decrypt back to this exact content after download
+- Testing AES-256-GCM encryption
+- File size: Small text file (~500 bytes)
+- Created for professor demonstration
+
+Test timestamp: 2025-10-25 14:00:00
+Unique identifier: CRYPTOVAULT_TEST_FILE_001

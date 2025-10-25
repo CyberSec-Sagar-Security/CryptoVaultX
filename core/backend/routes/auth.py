@@ -2,9 +2,9 @@ from flask import Blueprint, request, jsonify, current_app
 from flask_jwt_extended import jwt_required, get_jwt_identity, create_access_token
 import re
 import logging
-import bcrypt
-from database import User, db_manager
-import psycopg2
+from werkzeug.security import check_password_hash, generate_password_hash
+from models import User, db  # Use SQLAlchemy models instead of old database
+from storage_manager import storage_manager
 
 logger = logging.getLogger(__name__)
 
@@ -88,27 +88,42 @@ def register():
         if existing_user:
             return jsonify({'message': 'Email already registered'}), 409
             
-        existing_user = User.find_by_username(username)
+        # Check if username exists (query directly since find_by_username doesn't exist)
+        existing_user = User.query.filter_by(username=username).first()
         if existing_user:
             return jsonify({'message': 'Username already taken'}), 409
         
-        # Create new user
-        user_data = User.create(username, email, password, username)
-        if user_data:
-            logger.info(f"✅ REGISTRATION SUCCESS - User ID: {user_data.get('id')}, Email: {user_data.get('email')}")
-            return jsonify({
-                'success': True,
-                'message': 'User registered successfully',
-                'user': user_data
-            }), 201
-        else:
-            logger.error(f"❌ REGISTRATION FAILED - User.create() returned None")
-            return jsonify({'message': 'Registration failed'}), 500
+        # Create new user with SQLAlchemy
+        new_user = User(
+            username=username,
+            name=username,  # Use username as display name for now
+            email=email.lower(),
+            password_hash=generate_password_hash(password)
+        )
         
-    except psycopg2.IntegrityError:
-        return jsonify({'message': 'Email or username already registered'}), 409
-    
+        db.session.add(new_user)
+        db.session.commit()
+        
+        # Create storage folders for the new user
+        try:
+            storage_manager.create_user_folders(new_user.id)
+            logger.info(f"✅ Storage folders created for user {new_user.id}")
+        except Exception as e:
+            logger.error(f"❌ Failed to create storage folders for user {new_user.id}: {e}")
+            # Don't fail registration if folder creation fails
+        
+        logger.info(f"✅ REGISTRATION SUCCESS - User ID: {new_user.id}, Email: {new_user.email}")
+        return jsonify({
+            'success': True,
+            'message': 'User registered successfully',
+            'user': new_user.to_dict()
+        }), 201
+        
     except Exception as e:
+        db.session.rollback()
+        logger.error(f"❌ REGISTRATION FAILED - Error: {str(e)}")
+        if "unique constraint" in str(e).lower() or "already exists" in str(e).lower():
+            return jsonify({'message': 'Email or username already registered'}), 409
         return jsonify({'message': 'Registration failed', 'details': str(e)}), 500
 
 @auth_bp.route('/login', methods=['POST', 'OPTIONS'])
@@ -134,22 +149,22 @@ def login():
         if not password:
             return jsonify({'message': 'Password is required'}), 400
         
-        # Use verify_password which handles both user lookup and password verification
-        verified_user = User.verify_password(email, password)
-        if not verified_user:
+        # Use SQLAlchemy User model for authentication
+        user = User.find_by_email(email)
+        if not user or not check_password_hash(user.password_hash, password):
             logger.error(f"❌ LOGIN FAILED - Invalid credentials for email: {email}")
             return jsonify({'message': 'Invalid credentials'}), 401
 
-        logger.info(f"✅ LOGIN SUCCESS - User ID: {verified_user['id']}, Email: {verified_user['email']}")
+        logger.info(f"✅ LOGIN SUCCESS - User ID: {user.id}, Email: {user.email}")
         
         # Cast identity to string for JWT 'sub' claim compliance
-        access_token = create_access_token(identity=str(verified_user['id']))
+        access_token = create_access_token(identity=str(user.id))
 
         return jsonify({
             'success': True,
             'message': 'Login successful',
-            'user': verified_user,
-            'token': access_token
+            'access_token': access_token,
+            'user': user.to_dict()
         }), 200
         
     except Exception as e:
@@ -166,14 +181,14 @@ def get_current_user():
             current_user_id = int(current_user_identity)
         except (TypeError, ValueError):
             return jsonify({'message': 'Invalid user identity in token'}), 400
-        user = User.find_by_id(current_user_id)
         
+        user = User.find_by_id(current_user_id)
         if not user:
             return jsonify({'message': 'User not found'}), 404
         
         return jsonify({
             'success': True,
-            'user': user
+            'user': user.to_dict()
         }), 200
         
     except Exception as e:

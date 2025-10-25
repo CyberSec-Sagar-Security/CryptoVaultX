@@ -74,7 +74,7 @@ class User(db.Model):
         return User.query.filter_by(id=user_id, is_active=True).first()
 
 class File(db.Model):
-    """File model for storing encrypted file metadata with local filesystem storage"""
+    """File model for storing encrypted files directly in PostgreSQL with BYTEA"""
     __tablename__ = 'files'
     
     id = db.Column(db.String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
@@ -84,11 +84,9 @@ class File(db.Model):
     size_bytes = db.Column(db.BigInteger, nullable=False)  # Encrypted file size in bytes
     algo = db.Column(db.Text, nullable=False, default='AES-256-GCM')  # Encryption algorithm
     iv = db.Column(db.Text, nullable=False)  # Base64 encoded initialization vector
-    storage_path = db.Column(db.Text, nullable=False)  # Local filesystem path to encrypted file
-    status = db.Column(db.String(20), nullable=False, default='active')  # 'active' or 'deleted'
+    storage_blob = db.Column(db.LargeBinary, nullable=False)  # BYTEA column for encrypted file content
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-    deleted_at = db.Column(db.DateTime, nullable=True)  # Timestamp when file was soft-deleted
     
     def __repr__(self):
         return f'<File {self.original_filename} (Owner: {self.owner_id})>'
@@ -101,35 +99,32 @@ class File(db.Model):
             'size_bytes': self.size_bytes,
             'algo': self.algo,
             'content_type': self.content_type,
-            'status': self.status,
             'created_at': self.created_at.isoformat(),
-            'updated_at': self.updated_at.isoformat() if self.updated_at else None,
-            'deleted_at': self.deleted_at.isoformat() if self.deleted_at else None
+            'updated_at': self.updated_at.isoformat() if self.updated_at else None
         }
         
         # Include encryption metadata for download
         if include_sensitive:
             file_dict.update({
                 'iv': self.iv,
-                'owner_id': self.owner_id,
-                'storage_path': self.storage_path
+                'owner_id': self.owner_id
             })
         
         return file_dict
     
     @staticmethod
     def find_by_id_and_owner(file_id, owner_id):
-        """Find active file by ID and owner (for access control)"""
-        return File.query.filter_by(id=file_id, owner_id=owner_id, status='active').first()
+        """Find file by ID and owner (for access control)"""
+        return File.query.filter_by(id=file_id, owner_id=owner_id).first()
     
     @staticmethod
     def find_by_owner(owner_id):
-        """Get all active files owned by a user"""
-        return File.query.filter_by(owner_id=owner_id, status='active').order_by(File.created_at.desc()).all()
+        """Get all files owned by a user"""
+        return File.query.filter_by(owner_id=owner_id).order_by(File.created_at.desc()).all()
     
     @staticmethod
     def get_user_storage_usage(owner_id):
-        """Calculate total storage usage for a user (active + deleted files)"""
+        """Calculate total storage usage for a user"""
         result = db.session.query(db.func.coalesce(db.func.sum(File.size_bytes), 0)).filter_by(owner_id=owner_id).scalar()
         return int(result or 0)
 
@@ -139,7 +134,7 @@ class Share(db.Model):
     
     id = db.Column(db.String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     
-    # Foreign keys - Using UUID for file_id to match files table
+    # Foreign keys
     file_id = db.Column(db.String(36), db.ForeignKey('files.id', ondelete='CASCADE'), nullable=False, index=True)
     grantee_user_id = db.Column(db.Integer, db.ForeignKey('users.id', ondelete='CASCADE'), nullable=False, index=True)
     
@@ -149,8 +144,8 @@ class Share(db.Model):
     # Timestamps
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     
-    # Simple relationships without back_populates to avoid delete conflicts
-    file = db.relationship('File')
+    # Simple relationships without back_populates
+    file = db.relationship('File', backref='shares')
     grantee = db.relationship('User', backref='received_shares')
     
     # Unique constraint: one share per file per user
