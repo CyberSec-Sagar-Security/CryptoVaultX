@@ -79,15 +79,16 @@ def upload_encrypted_file():
         
         # Get current user from auth middleware
         user_id = g.current_user.id
+        username = g.current_user.username
         
         # Quota is enforced by middleware; continue
         
         # Read encrypted file content (ciphertext)
         ciphertext_buffer = file.read()
         
-        # Generate unique file ID and storage path
+        # Generate unique file ID and storage path using username
         file_id = str(uuid.uuid4())
-        storage_path = storage_manager.generate_storage_path(user_id, original_filename)
+        storage_path = storage_manager.generate_storage_path(username, original_filename)
         
         # Save encrypted file to local filesystem
         if not storage_manager.save_encrypted_file(ciphertext_buffer, storage_path):
@@ -122,5 +123,11 @@ def upload_encrypted_file():
         
     except Exception as e:
         db.session.rollback()
-        print(f"Upload error: {str(e)}")  # Log error message only
-        return jsonify({'error': 'File upload failed'}), 500
+        import traceback
+        import sys
+        error_msg = f"❌ Upload error: {str(e)}"
+        traceback_msg = f"Full traceback:\n{traceback.format_exc()}"
+        print(error_msg, file=sys.stderr)
+        print(traceback_msg, file=sys.stderr)
+        sys.stderr.flush()
+        return jsonify({'error': 'File upload failed', 'details': str(e)}), 500

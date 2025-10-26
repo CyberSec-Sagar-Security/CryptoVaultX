@@ -46,6 +46,9 @@ import {
 } from '../../lib/localFileStorage';
 import { apiRequest } from '../../services/api';
 
+// API Base URL constant
+const API_BASE_URL = (import.meta as any).env?.VITE_API_BASE_URL || 'http://localhost:5000/api';
+
 // Define encryption constants locally
 const ENCRYPTION_STATUS = {
   ENCRYPTED: 'encrypted',
@@ -215,9 +218,10 @@ const Upload: React.FC = () => {
 
       // Step 1: Client-side encryption
       updateFile({ status: 'encrypting', progress: 10 });
-      console.log(`Starting encryption for file: ${fileUpload.file.name}`);
+      console.log(`🔐 Starting encryption for file: ${fileUpload.file.name} (${fileUpload.file.size} bytes)`);
       
       const encryptedData = await encryptFileForUpload(fileUpload.file, fileUpload.encryptionLevel);
+      console.log(`✅ Encryption complete. Ciphertext size: ${encryptedData.ciphertextBlob.size} bytes`);
       updateFile({ progress: 30 });
       
       // Step 2: Upload to backend
@@ -238,21 +242,48 @@ const Upload: React.FC = () => {
       };
       formData.append('metadata', JSON.stringify(metadata));
       
-      // Upload to backend API
-      const response = await apiRequest('/files', {
+      console.log(`📤 Uploading to backend:`, {
+        filename: metadata.originalFilename,
+        size: encryptedData.ciphertextBlob.size,
+        iv: metadata.ivBase64,
+        algo: metadata.algo
+      });
+      
+      // Upload to backend API using direct fetch for FormData
+      const token = localStorage.getItem('access_token');
+      if (!token) {
+        throw new Error('No authentication token found. Please login again.');
+      }
+      
+      const uploadUrl = `${API_BASE_URL}/files`;
+      console.log(`🌐 Upload URL: ${uploadUrl}`);
+      
+      const response = await fetch(uploadUrl, {
         method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          // Don't set Content-Type - let browser set multipart/form-data boundary
+        },
         body: formData
       });
+      
+      console.log(`📥 Response status: ${response.status} ${response.statusText}`);
       
       updateFile({ progress: 90 });
       
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Upload failed');
+        let errorData;
+        try {
+          errorData = await response.json();
+        } catch {
+          errorData = { error: `HTTP ${response.status}: ${response.statusText}` };
+        }
+        console.error(`❌ Upload failed:`, errorData);
+        throw new Error(errorData.error || errorData.message || `Upload failed with status ${response.status}`);
       }
       
       const result = await response.json();
-      console.log(`Backend upload successful. File ID: ${result.id}`);
+      console.log(`✅ Backend upload successful. File ID: ${result.id}`);
 
       updateFile({ progress: 95 });
       await new Promise(resolve => setTimeout(resolve, 500));
@@ -264,10 +295,16 @@ const Upload: React.FC = () => {
       }));
 
     } catch (error) {
-      console.error('Upload error:', error);
+      console.error('❌ Upload error:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Upload failed';
+      console.error(`❌ Error details:`, {
+        message: errorMessage,
+        type: error instanceof TypeError ? 'Network/CORS Error' : 'Unknown Error',
+        file: fileUpload.file.name
+      });
       updateFile({ 
         status: 'error', 
-        error: error instanceof Error ? error.message : 'Upload failed' 
+        error: errorMessage
       });
     }
   };

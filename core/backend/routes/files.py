@@ -69,10 +69,11 @@ def list_user_files():
     """List all active files owned by the authenticated user"""
     try:
         user_id = g.current_user.id
+        username = g.current_user.username
         files = File.find_by_owner(user_id)
         
-        # Get detailed storage usage from storage manager
-        storage_usage = storage_manager.get_user_storage_usage(user_id)
+        # Get detailed storage usage from storage manager using username
+        storage_usage = storage_manager.get_user_storage_usage(username)
         
         file_list = [file.to_dict() for file in files]
         
@@ -101,7 +102,8 @@ def get_user_quota():
     """Get current user's storage quota and usage"""
     try:
         user_id = g.current_user.id
-        storage_usage = storage_manager.get_user_storage_usage(user_id)
+        username = g.current_user.username
+        storage_usage = storage_manager.get_user_storage_usage(username)
         
         return jsonify({
             'storage_info': {

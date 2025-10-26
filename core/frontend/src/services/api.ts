@@ -1,8 +1,11 @@
 import axios from 'axios';
 
+// API Base URL constant
+const API_BASE_URL = (import.meta as any).env?.VITE_API_BASE_URL || 'http://localhost:5000/api';
+
 // Create axios instance with base configuration
 const api = axios.create({
-  baseURL: import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api',
+  baseURL: API_BASE_URL,
   timeout: 10000,
   headers: {
     'Content-Type': 'application/json',
@@ -46,7 +49,6 @@ export default api;
  */
 export const apiRequest = async (url: string, options: RequestInit = {}) => {
   const token = localStorage.getItem('access_token');
-  const baseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api';
   
   const defaultHeaders: HeadersInit = {
     'Content-Type': 'application/json',
@@ -61,7 +63,7 @@ export const apiRequest = async (url: string, options: RequestInit = {}) => {
     },
   };
 
-  const response = await fetch(`${baseUrl}${url}`, config);
+  const response = await fetch(`${API_BASE_URL}${url}`, config);
 
   if (response.status === 401) {
     localStorage.removeItem('access_token');

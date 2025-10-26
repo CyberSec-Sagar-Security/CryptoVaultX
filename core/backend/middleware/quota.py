@@ -23,7 +23,8 @@ def quota_required(f):
             uploaded_file.seek(current_pos)
 
             user_id = g.current_user.id
-            can_upload, message = storage_manager.check_quota_before_upload(user_id, file_size)
+            username = g.current_user.username
+            can_upload, message = storage_manager.check_quota_before_upload(username, file_size)
             if not can_upload:
                 return jsonify({'error': 'quota_exceeded', 'message': message}), 413
 

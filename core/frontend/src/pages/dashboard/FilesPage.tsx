@@ -31,6 +31,9 @@ import {
   Archive,
   Code
 } from 'lucide-react';
+
+// API Base URL constant
+const API_BASE_URL = (import.meta as any).env?.VITE_API_BASE_URL || 'http://localhost:5000/api';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../components/ui/card';
 import { Button } from '../../components/ui/button';
 import { Input } from '../../components/ui/input';
@@ -94,13 +97,13 @@ const FilesPage: React.FC = () => {
       setLoading(true);
       setError(null);
       
-      // Get files from backend API
-      const response = await apiRequest('/files/list');
-      if (!response.ok) {
-        throw new Error('Failed to fetch files from server');
-      }
+      console.log('📋 Fetching files from backend...');
       
-      const data = await response.json();
+      // Get files from backend API (apiRequest returns parsed JSON data)
+      const data = await apiRequest('/files/list');
+      console.log('📋 Received data:', data);
+      console.log('📋 Files count:', data.files?.length || 0);
+      
       const apiFiles = data.files || [];
       
       // Convert API response to FileItem format
@@ -118,9 +121,10 @@ const FilesPage: React.FC = () => {
         }
       }));
       
+      console.log('✅ Formatted files:', formattedFiles);
       setFiles(formattedFiles);
     } catch (err) {
-      console.error('Error fetching files:', err);
+      console.error('❌ Error fetching files:', err);
       setError(err instanceof Error ? err.message : 'Failed to fetch files');
     } finally {
       setLoading(false);
@@ -132,9 +136,20 @@ const FilesPage: React.FC = () => {
     fetchFiles();
   }, []);
 
+  // Auto-refresh files every 10 seconds for real-time sync
+  useEffect(() => {
+    const interval = setInterval(() => {
+      console.log('🔄 Auto-refreshing files list...');
+      fetchFiles();
+    }, 10000); // Refresh every 10 seconds
+
+    return () => clearInterval(interval);
+  }, []);
+
   // Listen for file upload events to refresh the list
   useEffect(() => {
     const handleFileUploaded = () => {
+      console.log('📤 File uploaded event detected, refreshing list...');
       fetchFiles(); // Refresh the files list when a new file is uploaded
     };
 
@@ -202,6 +217,8 @@ const FilesPage: React.FC = () => {
     const progressKey = file.id;
     
     try {
+      console.log('📥 Starting download for:', file.filename);
+      
       // Set initial progress
       setDownloadProgress(prev => new Map(prev.set(progressKey, {
         fileId: file.id,
@@ -209,19 +226,25 @@ const FilesPage: React.FC = () => {
         status: 'starting'
       })));
       
-      // Step 1: Download encrypted file from backend
+      // Step 1: Download encrypted file from backend using direct fetch
       setDownloadProgress(prev => new Map(prev.set(progressKey, {
         fileId: file.id,
         progress: 20,
         status: 'downloading'
       })));
       
-      const response = await apiRequest(`/files/${file.id}`, {
-        method: 'GET'
+      console.log('📥 Fetching encrypted file from backend...');
+      const token = localStorage.getItem('access_token');
+      const response = await fetch(`${API_BASE_URL}/files/${file.id}`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
       });
       
       if (!response.ok) {
-        throw new Error('Failed to download file from server');
+        throw new Error(`Failed to download file from server: ${response.status} ${response.statusText}`);
       }
       
       // Step 2: Get file data and metadata from headers
@@ -230,8 +253,11 @@ const FilesPage: React.FC = () => {
       const iv = response.headers.get('X-File-IV');
       const algo = response.headers.get('X-File-Algo') || 'AES-256-GCM';
       
+      console.log('📥 Downloaded encrypted data:', encryptedData.byteLength, 'bytes');
+      console.log('📥 File metadata - Name:', fileName, 'IV:', iv, 'Algo:', algo);
+      
       if (!iv) {
-        throw new Error('Missing encryption metadata');
+        throw new Error('Missing encryption metadata (IV not found in response headers)');
       }
       
       setDownloadProgress(prev => new Map(prev.set(progressKey, {
@@ -241,6 +267,7 @@ const FilesPage: React.FC = () => {
       })));
       
       // Step 3: Decrypt file using session key
+      console.log('🔓 Decrypting file...');
       const sessionKey = await getSessionKey('HIGH');
       const decryptedData = await decryptFile(
         encryptedData,
@@ -249,19 +276,21 @@ const FilesPage: React.FC = () => {
         'HIGH'
       );
       
+      console.log('✅ Decryption successful! Size:', decryptedData.byteLength, 'bytes');
+      
       setDownloadProgress(prev => new Map(prev.set(progressKey, {
         fileId: file.id,
         progress: 80,
         status: 'saving'
       })));
       
-      // Step 4: Create and download file
+      // Step 4: Create and download file with original name and format
       const blob = new Blob([decryptedData], { type: file.content_type || 'application/octet-stream' });
       const url = URL.createObjectURL(blob);
       
       const a = document.createElement('a');
       a.href = url;
-      a.download = fileName;
+      a.download = fileName; // Original filename (e.g., document.pdf)
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
@@ -285,31 +314,13 @@ const FilesPage: React.FC = () => {
       }, 3000);
 
     } catch (error) {
-      console.error('Download error:', error);
+      console.error('❌ Download error:', error);
       const errorMessage = error instanceof Error ? error.message : 'Download failed';
       
       setDownloadProgress(prev => new Map(prev.set(progressKey, {
         fileId: file.id,
         progress: 0,
         status: 'error'
-      })));
-      
-      // Remove error progress after delay
-      setTimeout(() => {
-        setDownloadProgress(prev => {
-          const newMap = new Map(prev);
-          newMap.delete(progressKey);
-          return newMap;
-        });
-      }, 5000);
-    }
-  };
-      
-      setDownloadProgress(prev => new Map(prev.set(progressKey, {
-        fileId: file.id,
-        progress: 0,
-        status: 'error',
-        error: errorMessage
       })));
       
       // Show user-friendly error notification
@@ -344,15 +355,25 @@ const FilesPage: React.FC = () => {
     }
 
     try {
+      console.log('🗑️ Deleting file:', file.filename, '(ID:', file.id, ')');
+      
       // Check if file is stored locally
       if ((file as any).storage_type === 'local') {
         await deleteFileLocally(file.id);
+        console.log('✅ File deleted locally');
       } else {
         await apiRequest(`/files/${file.id}`, { method: 'DELETE' });
+        console.log('✅ File deleted from backend');
       }
       
+      // Remove from UI immediately
       setFiles(prev => prev.filter(f => f.id !== file.id));
+      console.log('✅ File removed from UI');
+      
+      // Refresh list to ensure synchronization
+      await fetchFiles();
     } catch (error) {
+      console.error('❌ Delete error:', error);
       setError(error instanceof Error ? error.message : 'Failed to delete file');
     }
   };

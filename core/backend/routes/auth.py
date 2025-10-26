@@ -2,7 +2,6 @@ from flask import Blueprint, request, jsonify, current_app
 from flask_jwt_extended import jwt_required, get_jwt_identity, create_access_token
 import re
 import logging
-from werkzeug.security import check_password_hash, generate_password_hash
 from models import User, db  # Use SQLAlchemy models instead of old database
 from storage_manager import storage_manager
 
@@ -97,22 +96,22 @@ def register():
         new_user = User(
             username=username,
             name=username,  # Use username as display name for now
-            email=email.lower(),
-            password_hash=generate_password_hash(password)
+            email=email.lower()
         )
+        new_user.set_password(password)  # Use the custom bcrypt method
         
         db.session.add(new_user)
         db.session.commit()
         
-        # Create storage folders for the new user
+        # Create storage folders for the new user using username
         try:
-            storage_manager.create_user_folders(new_user.id)
-            logger.info(f"✅ Storage folders created for user {new_user.id}")
+            storage_manager.create_user_folders(new_user.username, new_user.id)
+            logger.info(f"✅ Storage folders created for user {new_user.username} (ID: {new_user.id})")
         except Exception as e:
-            logger.error(f"❌ Failed to create storage folders for user {new_user.id}: {e}")
+            logger.error(f"❌ Failed to create storage folders for user {new_user.username}: {e}")
             # Don't fail registration if folder creation fails
         
-        logger.info(f"✅ REGISTRATION SUCCESS - User ID: {new_user.id}, Email: {new_user.email}")
+        logger.info(f"✅ REGISTRATION SUCCESS - User ID: {new_user.id}, Email: {new_user.email}, Username: {new_user.username}")
         return jsonify({
             'success': True,
             'message': 'User registered successfully',
@@ -151,7 +150,7 @@ def login():
         
         # Use SQLAlchemy User model for authentication
         user = User.find_by_email(email)
-        if not user or not check_password_hash(user.password_hash, password):
+        if not user or not user.check_password(password):
             logger.error(f"❌ LOGIN FAILED - Invalid credentials for email: {email}")
             return jsonify({'message': 'Invalid credentials'}), 401
 
@@ -163,7 +162,8 @@ def login():
         return jsonify({
             'success': True,
             'message': 'Login successful',
-            'access_token': access_token,
+            'token': access_token,  # Changed from access_token to token for frontend compatibility
+            'access_token': access_token,  # Keep both for backward compatibility
             'user': user.to_dict()
         }), 200
         

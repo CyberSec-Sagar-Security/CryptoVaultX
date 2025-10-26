@@ -64,21 +64,41 @@ def create_app(config_name=None):
             'message': 'Please provide a valid JWT token'
         }), 401
     
-    # Configure CORS - Simple and effective
+    # Configure CORS - Enhanced for better browser compatibility
     CORS(app, 
-         resources={r"/*": {"origins": "*"}},
-         allow_headers=["Content-Type", "Authorization"],
-         methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"])
+         resources={r"/*": {
+             "origins": "*",
+             "allow_headers": ["Content-Type", "Authorization", "X-Requested-With"],
+             "expose_headers": [
+                 "Content-Type", "Authorization", 
+                 "X-File-IV", "X-File-Algo", "X-File-Name",
+                 "Access-Control-Allow-Origin", "Access-Control-Allow-Methods", "Access-Control-Allow-Headers"
+             ],
+             "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
+             "supports_credentials": False
+         }})
     
-    # Simple CORS handler
+    # Enhanced CORS handler for all responses
     @app.after_request
     def after_request(response):
-        response.headers.add('Access-Control-Allow-Origin', '*')
-        response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
-        response.headers.add('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS')
-        if request.method == 'OPTIONS':
-            response.status_code = 200
+        response.headers['Access-Control-Allow-Origin'] = '*'
+        response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization, X-Requested-With'
+        response.headers['Access-Control-Allow-Methods'] = 'GET, POST, PUT, DELETE, OPTIONS, PATCH'
+        response.headers['Access-Control-Expose-Headers'] = 'Content-Type, Authorization, X-File-IV, X-File-Algo, X-File-Name, Access-Control-Allow-Origin, Access-Control-Allow-Methods, Access-Control-Allow-Headers'
+        response.headers['Access-Control-Max-Age'] = '3600'
         return response
+    
+    # Explicit OPTIONS handler for preflight requests
+    @app.before_request
+    def handle_preflight():
+        if request.method == 'OPTIONS':
+            response = jsonify({'status': 'ok'})
+            response.headers['Access-Control-Allow-Origin'] = '*'
+            response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization, X-Requested-With, Access-Control-Request-Method, Access-Control-Request-Headers'
+            response.headers['Access-Control-Allow-Methods'] = 'GET, POST, PUT, DELETE, OPTIONS, PATCH'
+            response.headers['Access-Control-Expose-Headers'] = 'Content-Type, Authorization, X-File-IV, X-File-Algo, X-File-Name, Access-Control-Allow-Origin, Access-Control-Allow-Methods, Access-Control-Allow-Headers'
+            response.headers['Access-Control-Max-Age'] = '3600'
+            return response, 200
     
     # Register routes
     register_routes(app)

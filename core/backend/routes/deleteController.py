@@ -23,14 +23,15 @@ def delete_file(file_id):
     """
     try:
         user_id = g.current_user.id
+        username = g.current_user.username
         
         # Find file and verify ownership
         file_record = File.find_by_id_and_owner(file_id, user_id)
         if not file_record:
             return jsonify({'error': 'File not found or access denied'}), 404
         
-        # Move file from uploads to deleted folder
-        deleted_path = storage_manager.move_to_deleted(file_record.storage_path, user_id)
+        # Move file from uploads to deleted folder using username
+        deleted_path = storage_manager.move_to_deleted(file_record.storage_path, username)
         if deleted_path is None:
             return jsonify({'error': 'Failed to move file to deleted folder'}), 500
         

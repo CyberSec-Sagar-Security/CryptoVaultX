@@ -1,0 +1,542 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Frontend→Backend Connectivity Test</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', system-ui, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            padding: 40px;
+        }
+        h1 {
+            color: #667eea;
+            margin-bottom: 10px;
+            text-align: center;
+            font-size: 2em;
+        }
+        .subtitle {
+            text-align: center;
+            color: #718096;
+            margin-bottom: 30px;
+        }
+        .status-bar {
+            background: #f7fafc;
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 30px;
+            display: flex;
+            justify-content: space-around;
+            border: 2px solid #e2e8f0;
+        }
+        .status-item {
+            text-align: center;
+        }
+        .status-label {
+            font-size: 12px;
+            color: #718096;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        .status-value {
+            font-size: 18px;
+            font-weight: bold;
+            margin-top: 5px;
+        }
+        .status-value.online { color: #48bb78; }
+        .status-value.offline { color: #f56565; }
+        .test-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 15px;
+            margin-bottom: 30px;
+        }
+        .test-card {
+            background: #f7fafc;
+            border: 2px solid #e2e8f0;
+            border-radius: 12px;
+            padding: 20px;
+            transition: all 0.3s;
+        }
+        .test-card:hover {
+            border-color: #667eea;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.1);
+        }
+        .test-card h3 {
+            font-size: 14px;
+            color: #2d3748;
+            margin-bottom: 10px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .test-icon {
+            font-size: 20px;
+        }
+        .test-status {
+            font-size: 24px;
+            text-align: center;
+            padding: 10px;
+        }
+        .test-details {
+            font-size: 12px;
+            color: #718096;
+            margin-top: 10px;
+            font-family: 'Courier New', monospace;
+            white-space: pre-wrap;
+            max-height: 100px;
+            overflow-y: auto;
+        }
+        button {
+            background: #667eea;
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: 600;
+            width: 100%;
+            margin-bottom: 20px;
+            transition: all 0.3s;
+        }
+        button:hover {
+            background: #5568d3;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+        }
+        button:disabled {
+            background: #cbd5e0;
+            cursor: not-allowed;
+            transform: none;
+        }
+        .console-output {
+            background: #1a202c;
+            color: #e2e8f0;
+            padding: 20px;
+            border-radius: 8px;
+            font-family: 'Courier New', monospace;
+            font-size: 13px;
+            max-height: 400px;
+            overflow-y: auto;
+            margin-top: 20px;
+            white-space: pre-wrap;
+        }
+        .log-success { color: #48bb78; }
+        .log-error { color: #f56565; }
+        .log-info { color: #4299e1; }
+        .log-warning { color: #ed8936; }
+        .progress-bar {
+            width: 100%;
+            height: 6px;
+            background: #e2e8f0;
+            border-radius: 3px;
+            overflow: hidden;
+            margin-top: 10px;
+        }
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+            width: 0%;
+            transition: width 0.3s;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔬 Frontend↔Backend Connectivity Test</h1>
+        <p class="subtitle">CryptoVault Integration Verification</p>
+
+        <div class="status-bar">
+            <div class="status-item">
+                <div class="status-label">Backend</div>
+                <div class="status-value" id="backendStatus">Checking...</div>
+            </div>
+            <div class="status-item">
+                <div class="status-label">Frontend</div>
+                <div class="status-value online">Online</div>
+            </div>
+            <div class="status-item">
+                <div class="status-label">Tests Passed</div>
+                <div class="status-value" id="testsCount">0/10</div>
+            </div>
+        </div>
+
+        <button onclick="runAllTests()" id="runButton">▶️ Run All Connectivity Tests</button>
+
+        <div class="progress-bar">
+            <div class="progress-fill" id="progressBar"></div>
+        </div>
+
+        <div class="test-grid" id="testGrid"></div>
+
+        <div class="console-output" id="console"></div>
+    </div>
+
+    <script>
+        const API_BASE = 'http://localhost:5000/api';
+        const tests = {
+            health: { name: 'Backend Health', icon: '🏥', status: '⏳' },
+            register: { name: 'User Registration', icon: '👤', status: '⏳' },
+            login: { name: 'User Login', icon: '🔐', status: '⏳' },
+            upload: { name: 'File Upload', icon: '📤', status: '⏳' },
+            list: { name: 'File List', icon: '📋', status: '⏳' },
+            download: { name: 'File Download', icon: '📥', status: '⏳' },
+            quota: { name: 'Storage Quota', icon: '💾', status: '⏳' },
+            delete: { name: 'File Delete', icon: '🗑️', status: '⏳' },
+            cors: { name: 'CORS Check', icon: '🌐', status: '⏳' },
+            storage: { name: 'Local Storage', icon: '📁', status: '⏳' }
+        };
+
+        let testData = {
+            token: null,
+            fileId: null,
+            email: `test_${Date.now()}@test.com`,
+            username: `user_${Date.now()}`,
+            password: 'TestPass123!'
+        };
+
+        let passedTests = 0;
+        const totalTests = Object.keys(tests).length;
+
+        function log(message, type = 'info') {
+            const console = document.getElementById('console');
+            const colors = {
+                success: 'log-success',
+                error: 'log-error',
+                info: 'log-info',
+                warning: 'log-warning'
+            };
+            const timestamp = new Date().toLocaleTimeString();
+            console.innerHTML += `<span class="${colors[type]}">[${timestamp}] ${message}</span>\n`;
+            console.scrollTop = console.scrollHeight;
+        }
+
+        function updateProgress() {
+            const progress = (passedTests / totalTests) * 100;
+            document.getElementById('progressBar').style.width = `${progress}%`;
+            document.getElementById('testsCount').textContent = `${passedTests}/${totalTests}`;
+        }
+
+        function updateTest(testKey, passed, details = '') {
+            tests[testKey].status = passed ? '✅' : '❌';
+            tests[testKey].details = details;
+            if (passed) passedTests++;
+            renderTests();
+            updateProgress();
+        }
+
+        function renderTests() {
+            const grid = document.getElementById('testGrid');
+            grid.innerHTML = Object.entries(tests).map(([key, test]) => `
+                <div class="test-card">
+                    <h3>
+                        <span class="test-icon">${test.icon}</span>
+                        ${test.name}
+                    </h3>
+                    <div class="test-status">${test.status}</div>
+                    ${test.details ? `<div class="test-details">${test.details}</div>` : ''}
+                </div>
+            `).join('');
+        }
+
+        async function checkBackendHealth() {
+            try {
+                const response = await fetch(`${API_BASE}`);
+                const data = await response.json();
+                const online = response.ok && data.status === 'ok';
+                document.getElementById('backendStatus').className = `status-value ${online ? 'online' : 'offline'}`;
+                document.getElementById('backendStatus').textContent = online ? 'Online' : 'Offline';
+                return online;
+            } catch {
+                document.getElementById('backendStatus').className = 'status-value offline';
+                document.getElementById('backendStatus').textContent = 'Offline';
+                return false;
+            }
+        }
+
+        async function runAllTests() {
+            document.getElementById('runButton').disabled = true;
+            document.getElementById('console').innerHTML = '';
+            passedTests = 0;
+            
+            // Reset all tests
+            Object.keys(tests).forEach(key => tests[key].status = '⏳');
+            renderTests();
+            updateProgress();
+
+            log('🚀 Starting comprehensive connectivity test...', 'info');
+
+            // Test 1: Backend Health
+            log('1️⃣  Testing Backend Health...', 'info');
+            try {
+                const response = await fetch(`${API_BASE}`);
+                const data = await response.json();
+                if (response.ok && data.status === 'ok') {
+                    log('✅ Backend is online and responding', 'success');
+                    updateTest('health', true, `Status: ${data.status}\nMessage: ${data.message}`);
+                } else {
+                    throw new Error('Backend returned unexpected response');
+                }
+            } catch (error) {
+                log(`❌ Backend health check failed: ${error.message}`, 'error');
+                updateTest('health', false, error.message);
+                document.getElementById('runButton').disabled = false;
+                return;
+            }
+
+            // Test 2: User Registration
+            log('\n2️⃣  Testing User Registration...', 'info');
+            try {
+                const response = await fetch(`${API_BASE}/auth/register`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        username: testData.username,
+                        email: testData.email,
+                        password: testData.password
+                    })
+                });
+                const data = await response.json();
+                if (response.ok) {
+                    log(`✅ User registered: ${testData.email}`, 'success');
+                    updateTest('register', true, `User ID: ${data.user.id}\nEmail: ${testData.email}`);
+                } else {
+                    throw new Error(data.message || 'Registration failed');
+                }
+            } catch (error) {
+                log(`❌ Registration failed: ${error.message}`, 'error');
+                updateTest('register', false, error.message);
+            }
+
+            // Test 3: User Login
+            log('\n3️⃣  Testing User Login...', 'info');
+            try {
+                const response = await fetch(`${API_BASE}/auth/login`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        email: testData.email,
+                        password: testData.password
+                    })
+                });
+                const data = await response.json();
+                if (response.ok && data.access_token) {
+                    testData.token = data.access_token;
+                    log('✅ Login successful, token received', 'success');
+                    updateTest('login', true, `Token: ${testData.token.substring(0, 30)}...`);
+                } else {
+                    throw new Error(data.message || 'Login failed');
+                }
+            } catch (error) {
+                log(`❌ Login failed: ${error.message}`, 'error');
+                updateTest('login', false, error.message);
+                document.getElementById('runButton').disabled = false;
+                return;
+            }
+
+            // Test 4: File Upload
+            log('\n4️⃣  Testing File Upload...', 'info');
+            try {
+                const formData = new FormData();
+                const testContent = new Blob(['Frontend connectivity test file'], { type: 'text/plain' });
+                formData.append('file', testContent, 'frontend_test.enc');
+                formData.append('metadata', JSON.stringify({
+                    originalFilename: 'frontend_test.txt',
+                    ivBase64: btoa('+7xapSQ5rp2rpKiV'),
+                    algo: 'AES-256-GCM'
+                }));
+
+                log('  → Sending multipart/form-data with file and metadata...', 'info');
+                const response = await fetch(`${API_BASE}/files`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${testData.token}`
+                        // Don't set Content-Type - browser sets it with boundary for multipart/form-data
+                    },
+                    body: formData
+                });
+                
+                log(`  → Response status: ${response.status} ${response.statusText}`, 'info');
+                
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    log(`  → Error response: ${errorText}`, 'error');
+                    throw new Error(`HTTP ${response.status}: ${errorText}`);
+                }
+                
+                const data = await response.json();
+                if (data.id) {
+                    testData.fileId = data.id;
+                    log(`✅ File uploaded successfully: ${data.original_filename}`, 'success');
+                    updateTest('upload', true, `File ID: ${data.id}\nSize: ${data.size_bytes} bytes`);
+                } else {
+                    throw new Error(data.error || 'Upload failed - no file ID returned');
+                }
+            } catch (error) {
+                log(`❌ Upload failed: ${error.message}`, 'error');
+                if (error.message === 'Failed to fetch') {
+                    log('  → This usually means CORS issue or backend is down', 'warning');
+                    log('  → Check: 1) Backend running on port 5000', 'warning');
+                    log('  →        2) CORS headers configured', 'warning');
+                    log('  →        3) Network tab in DevTools for details', 'warning');
+                }
+                updateTest('upload', false, error.message);
+            }
+
+            // Test 5: File List
+            log('\n5️⃣  Testing File List...', 'info');
+            try {
+                const response = await fetch(`${API_BASE}/files/list`, {
+                    headers: { 'Authorization': `Bearer ${testData.token}` }
+                });
+                const data = await response.json();
+                if (response.ok) {
+                    const count = data.files.length;
+                    log(`✅ Retrieved ${count} file(s)`, 'success');
+                    updateTest('list', true, `Files: ${count}\n${data.files.map(f => f.original_filename).join(', ')}`);
+                } else {
+                    throw new Error(data.message || 'List failed');
+                }
+            } catch (error) {
+                log(`❌ List failed: ${error.message}`, 'error');
+                updateTest('list', false, error.message);
+            }
+
+            // Test 6: File Download
+            if (testData.fileId) {
+                log('\n6️⃣  Testing File Download...', 'info');
+                try {
+                    const response = await fetch(`${API_BASE}/files/${testData.fileId}`, {
+                        headers: { 'Authorization': `Bearer ${testData.token}` }
+                    });
+                    if (response.ok) {
+                        const iv = response.headers.get('X-File-IV');
+                        const algo = response.headers.get('X-File-Algo');
+                        const filename = response.headers.get('X-File-Name');
+                        log(`✅ Download successful: ${filename}`, 'success');
+                        updateTest('download', true, `Filename: ${filename}\nIV: ${iv}\nAlgo: ${algo}`);
+                    } else {
+                        throw new Error('Download failed');
+                    }
+                } catch (error) {
+                    log(`❌ Download failed: ${error.message}`, 'error');
+                    updateTest('download', false, error.message);
+                }
+            }
+
+            // Test 7: Storage Quota
+            log('\n7️⃣  Testing Storage Quota...', 'info');
+            try {
+                const response = await fetch(`${API_BASE}/files/quota`, {
+                    headers: { 'Authorization': `Bearer ${testData.token}` }
+                });
+                const data = await response.json();
+                if (response.ok && data.storage_info) {
+                    const usage = (data.storage_info.uploads_bytes / (1024 * 1024)).toFixed(2);
+                    const quota = (data.storage_info.quota_bytes / (1024 * 1024)).toFixed(2);
+                    log(`✅ Quota check successful: ${usage} MB / ${quota} MB`, 'success');
+                    updateTest('quota', true, `Usage: ${usage} MB\nQuota: ${quota} MB\nPercent: ${data.storage_info.usage_percentage.toFixed(1)}%`);
+                } else {
+                    throw new Error(data.error || 'Quota check failed');
+                }
+            } catch (error) {
+                log(`❌ Quota check failed: ${error.message}`, 'error');
+                updateTest('quota', false, error.message);
+            }
+
+            // Test 8: File Delete
+            if (testData.fileId) {
+                log('\n8️⃣  Testing File Delete...', 'info');
+                try {
+                    const response = await fetch(`${API_BASE}/files/${testData.fileId}`, {
+                        method: 'DELETE',
+                        headers: { 'Authorization': `Bearer ${testData.token}` }
+                    });
+                    const data = await response.json();
+                    if (response.ok) {
+                        log(`✅ File deleted successfully`, 'success');
+                        updateTest('delete', true, data.message);
+                    } else {
+                        throw new Error(data.error || 'Delete failed');
+                    }
+                } catch (error) {
+                    log(`❌ Delete failed: ${error.message}`, 'error');
+                    updateTest('delete', false, error.message);
+                }
+            }
+
+            // Test 9: CORS
+            log('\n9️⃣  Testing CORS Headers...', 'info');
+            try {
+                // Make an OPTIONS preflight request to check CORS headers
+                const response = await fetch(`${API_BASE}/files`, { 
+                    method: 'OPTIONS',
+                    headers: {
+                        'Access-Control-Request-Method': 'POST',
+                        'Access-Control-Request-Headers': 'Content-Type, Authorization'
+                    }
+                });
+                
+                const origin = response.headers.get('Access-Control-Allow-Origin');
+                const methods = response.headers.get('Access-Control-Allow-Methods');
+                const headers = response.headers.get('Access-Control-Allow-Headers');
+                
+                log(`  → Origin: ${origin || 'missing'}`, origin ? 'success' : 'error');
+                log(`  → Methods: ${methods || 'missing'}`, methods ? 'success' : 'error');
+                log(`  → Headers: ${headers || 'missing'}`, headers ? 'success' : 'error');
+                
+                if (origin && methods && headers) {
+                    log('✅ CORS headers properly configured', 'success');
+                    updateTest('cors', true, `Origin: ${origin}\nMethods: ${methods}\nHeaders: ${headers}`);
+                } else {
+                    throw new Error(`Missing CORS headers - Origin: ${origin}, Methods: ${methods}, Headers: ${headers}`);
+                }
+            } catch (error) {
+                log(`❌ CORS check failed: ${error.message}`, 'error');
+                updateTest('cors', false, error.message);
+            }
+
+            // Test 10: localStorage
+            log('\n🔟 Testing LocalStorage...', 'info');
+            try {
+                localStorage.setItem('test_key', 'test_value');
+                const value = localStorage.getItem('test_key');
+                localStorage.removeItem('test_key');
+                if (value === 'test_value') {
+                    log('✅ LocalStorage working correctly', 'success');
+                    updateTest('storage', true, 'Read/Write: OK');
+                } else {
+                    throw new Error('LocalStorage test failed');
+                }
+            } catch (error) {
+                log(`❌ LocalStorage failed: ${error.message}`, 'error');
+                updateTest('storage', false, error.message);
+            }
+
+            log('\n\n═══════════════════════════════════════', 'info');
+            log(`📊 TEST COMPLETE: ${passedTests}/${totalTests} tests passed`, passedTests === totalTests ? 'success' : 'warning');
+            log('═══════════════════════════════════════', 'info');
+
+            document.getElementById('runButton').disabled = false;
+            document.getElementById('runButton').textContent = '🔄 Run Tests Again';
+        }
+
+        // Initialize
+        renderTests();
+        checkBackendHealth();
+    </script>
+</body>
+</html>
