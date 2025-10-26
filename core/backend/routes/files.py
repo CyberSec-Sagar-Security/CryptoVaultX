@@ -8,6 +8,7 @@ from datetime import datetime
 from database import db_manager
 from models import db, File
 from middleware.auth import auth_required
+from middleware.quota import quota_required
 from storage_manager import storage_manager
 import psycopg2
 
@@ -39,6 +40,7 @@ def get_user_storage_usage(owner_id):
 
 @files_bp.route('/', methods=['POST'])
 @auth_required
+@quota_required
 def upload_encrypted_file():
     """
     Upload encrypted file to local filesystem storage with quota enforcement.
@@ -94,13 +96,7 @@ def upload_encrypted_file():
         # Get current user from auth middleware
         user_id = g.current_user.id
         
-        # Check quota BEFORE accepting upload using storage manager
-        can_upload, quota_message = storage_manager.check_quota_before_upload(user_id, file_size)
-        if not can_upload:
-            return jsonify({
-                'error': 'quota_exceeded', 
-                'message': quota_message
-            }), 413
+        # Quota is enforced by middleware; continue
         
         # Read encrypted file content (ciphertext)
         ciphertext_buffer = file.read()
@@ -177,6 +173,8 @@ def download_encrypted_file(file_id):
         response.headers['X-File-IV'] = file_record.iv
         response.headers['X-File-Algo'] = file_record.algo
         response.headers['X-File-Size'] = str(file_record.size_bytes)
+        # Advise browsers to download
+        response.headers['Content-Disposition'] = f"attachment; filename=\"{file_record.original_filename}\""
         
         # Log safe metadata only
         print(f"✅ File downloaded: {file_id} (size: {file_record.size_bytes} bytes)")
@@ -186,6 +184,12 @@ def download_encrypted_file(file_id):
     except Exception as e:
         print(f"Download error: {str(e)}")  # Log error message only
         return jsonify({'error': 'File download failed'}), 500
+
+# Provide an explicit download path variant as per requirements
+@files_bp.route('/<file_id>/download', methods=['GET'])
+@auth_required
+def download_encrypted_file_alias(file_id):
+    return download_encrypted_file(file_id)
 
 @files_bp.route('/list', methods=['GET'])
 @auth_required
