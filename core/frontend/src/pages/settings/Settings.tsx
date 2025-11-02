@@ -56,11 +56,6 @@ const Settings: React.FC = () => {
     hardwareAcceleration: true,
     preloadFiles: false,
     cacheSize: '500', // MB
-    
-    // Privacy Settings
-    analyticsEnabled: false,
-    crashReporting: true,
-    telemetryEnabled: false
   });
 
   const updateSetting = (key: string, value: any) => {
@@ -83,10 +78,7 @@ const Settings: React.FC = () => {
         emailAlerts: true,
         hardwareAcceleration: true,
         preloadFiles: false,
-        cacheSize: '500',
-        analyticsEnabled: false,
-        crashReporting: true,
-        telemetryEnabled: false
+        cacheSize: '500'
       });
     }
   };
@@ -394,52 +386,6 @@ const Settings: React.FC = () => {
               </CardContent>
             </Card>
 
-            {/* Privacy Settings */}
-            <Card className="bg-white/10 border-white/20 backdrop-blur-xl lg:col-span-2">
-              <CardHeader>
-                <CardTitle className="text-white flex items-center gap-2">
-                  <Lock className="w-5 h-5" />
-                  Privacy Settings
-                </CardTitle>
-                <CardDescription className="text-gray-400">
-                  Control data collection and privacy options
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="grid md:grid-cols-3 gap-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-white font-medium">Anonymous Analytics</p>
-                    <p className="text-gray-400 text-sm">Help improve the app</p>
-                  </div>
-                  <Switch
-                    checked={settings.analyticsEnabled}
-                    onCheckedChange={(checked) => updateSetting('analyticsEnabled', checked)}
-                  />
-                </div>
-
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-white font-medium">Crash Reporting</p>
-                    <p className="text-gray-400 text-sm">Send crash reports to developers</p>
-                  </div>
-                  <Switch
-                    checked={settings.crashReporting}
-                    onCheckedChange={(checked) => updateSetting('crashReporting', checked)}
-                  />
-                </div>
-
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-white font-medium">Telemetry Data</p>
-                    <p className="text-gray-400 text-sm">Share usage statistics</p>
-                  </div>
-                  <Switch
-                    checked={settings.telemetryEnabled}
-                    onCheckedChange={(checked) => updateSetting('telemetryEnabled', checked)}
-                  />
-                </div>
-              </CardContent>
-            </Card>
           </div>
 
           {/* System Information */}

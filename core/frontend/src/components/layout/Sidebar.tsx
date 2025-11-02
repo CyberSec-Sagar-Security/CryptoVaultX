@@ -11,7 +11,6 @@ import {
   Files, 
   Share2, 
   BarChart3, 
-  Settings, 
   User, 
   HelpCircle,
   Shield,
@@ -36,12 +35,10 @@ const navItems: NavItem[] = [
   { icon: Upload, label: 'Upload', path: '/upload' },
   { icon: Files, label: 'Files', path: '/files' },
   { icon: Share2, label: 'Shared', path: '/shared' },
-  { icon: BarChart3, label: 'Analytics', path: '/analytics' },
 ];
 
 const secondaryItems: NavItem[] = [
   { icon: User, label: 'Profile', path: '/profile' },
-  { icon: Settings, label: 'Settings', path: '/settings' },
   { icon: HelpCircle, label: 'Help', path: '/help' },
 ];
 
@@ -49,6 +46,11 @@ export const Sidebar: React.FC<SidebarProps> = ({ isCollapsed = false }) => {
   const navigate = useNavigate();
   const location = useLocation();
   const { logout } = useAuth();
+
+  // Debug log
+  React.useEffect(() => {
+    console.log('Sidebar: isCollapsed prop changed to:', isCollapsed);
+  }, [isCollapsed]);
 
   const handleLogout = async () => {
     try {

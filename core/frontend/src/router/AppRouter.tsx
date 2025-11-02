@@ -15,9 +15,9 @@ import RegisterPage from '../pages/auth/RegisterPage';
 
 // Lazy load main components
 const DashboardPage = React.lazy(() => import('../pages/dashboard/Dashboard'));
-const AnalyticsPage = React.lazy(() => import('../pages/dashboard/AnalyticsPage'));
 const UploadPage = React.lazy(() => import('../pages/dashboard/Upload'));
 const FilesPage = React.lazy(() => import('../pages/dashboard/FilesPage'));
+const BulkFilesPage = React.lazy(() => import('../pages/dashboard/BulkFilesPage'));
 const FileDetailPage = React.lazy(() => import('../pages/dashboard/FileDetailPage'));
 
 // Shared files
@@ -28,6 +28,14 @@ const ProfilePage = React.lazy(() => import('../pages/profile/Profile'));
 const SettingsPage = React.lazy(() => import('../pages/settings/Settings'));
 const KeyBackupPage = React.lazy(() => import('../pages/settings/KeyBackup'));
 const HelpPage = React.lazy(() => import('../pages/help/HelpPage'));
+
+// Help Topic Pages
+const GettingStartedPage = React.lazy(() => import('../pages/help/GettingStartedPage'));
+const FileEncryptionPage = React.lazy(() => import('../pages/help/FileEncryptionPage'));
+const FileSharingPage = React.lazy(() => import('../pages/help/FileSharingPage'));
+const AccountSecurityPage = React.lazy(() => import('../pages/help/AccountSecurityPage'));
+const APIIntegrationPage = React.lazy(() => import('../pages/help/APIIntegrationPage'));
+const CollaborationPage = React.lazy(() => import('../pages/help/CollaborationPage'));
 
 // Legal pages
 const TermsOfServicePage = React.lazy(() => import('../pages/legal/TermsOfServiceNew'));
@@ -141,14 +149,6 @@ export default function AppRouter() {
               } 
             />
             <Route 
-              path="/analytics" 
-              element={
-                <ProtectedRoute>
-                  <AnalyticsPage />
-                </ProtectedRoute>
-              } 
-            />
-            <Route 
               path="/upload" 
               element={
                 <ProtectedRoute>
@@ -161,6 +161,14 @@ export default function AppRouter() {
               element={
                 <ProtectedRoute>
                   <FilesPage />
+                </ProtectedRoute>
+              } 
+            />
+            <Route 
+              path="/files/bulk" 
+              element={
+                <ProtectedRoute>
+                  <BulkFilesPage />
                 </ProtectedRoute>
               } 
             />
@@ -213,6 +221,56 @@ export default function AppRouter() {
               element={
                 <ProtectedRoute>
                   <HelpPage />
+                </ProtectedRoute>
+              } 
+            />
+            
+            {/* Help Topic Routes */}
+            <Route 
+              path="/help/getting-started" 
+              element={
+                <ProtectedRoute>
+                  <GettingStartedPage />
+                </ProtectedRoute>
+              } 
+            />
+            <Route 
+              path="/help/file-encryption" 
+              element={
+                <ProtectedRoute>
+                  <FileEncryptionPage />
+                </ProtectedRoute>
+              } 
+            />
+            <Route 
+              path="/help/file-sharing" 
+              element={
+                <ProtectedRoute>
+                  <FileSharingPage />
+                </ProtectedRoute>
+              } 
+            />
+            <Route 
+              path="/help/account-security" 
+              element={
+                <ProtectedRoute>
+                  <AccountSecurityPage />
+                </ProtectedRoute>
+              } 
+            />
+            <Route 
+              path="/help/api-keys" 
+              element={
+                <ProtectedRoute>
+                  <APIIntegrationPage />
+                </ProtectedRoute>
+              } 
+            />
+            <Route 
+              path="/help/collaboration" 
+              element={
+                <ProtectedRoute>
+                  <CollaborationPage />
                 </ProtectedRoute>
               } 
             />

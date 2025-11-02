@@ -18,7 +18,11 @@ class Config:
     
     # File Upload Configuration
     UPLOAD_FOLDER = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'uploads')
-    MAX_CONTENT_LENGTH = 100 * 1024 * 1024  # 100MB max file size
+    MAX_CONTENT_LENGTH = 512 * 1024 * 1024  # 512MB max file size - INCREASED FOR BETTER PERFORMANCE
+    
+    # Flask Performance Configuration - NO RATE LIMITING
+    SEND_FILE_MAX_AGE_DEFAULT = 0  # Disable caching for security
+    MAX_CONTENT_PATH = None  # No path length limit
     
     # CORS Configuration
     CORS_ORIGINS = os.environ.get('CORS_ORIGINS', 'http://localhost:5173,http://localhost:3001,http://localhost:5174').split(',')

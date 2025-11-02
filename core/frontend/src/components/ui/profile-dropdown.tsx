@@ -9,7 +9,6 @@ import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   User, 
-  Settings, 
   HelpCircle, 
   LogOut,
   ChevronDown,
@@ -17,23 +16,46 @@ import {
   Bell,
   Key
 } from 'lucide-react';
-import { Avatar, AvatarFallback } from './avatar';
+import { Avatar, AvatarFallback, AvatarImage } from './avatar';
 import { Button } from './button';
 
 interface ProfileDropdownProps {
   userInitials: string;
   username?: string;
+  profilePhoto?: string | null;
   onLogout: () => void;
 }
 
 const ProfileDropdown: React.FC<ProfileDropdownProps> = ({ 
   userInitials, 
   username,
+  profilePhoto,
   onLogout 
 }) => {
   const navigate = useNavigate();
   const [isOpen, setIsOpen] = useState(false);
+  const [photoUrl, setPhotoUrl] = useState<string | null>(profilePhoto || null);
   const dropdownRef = useRef<HTMLDivElement>(null);
+
+  const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+
+  // Listen for profile photo updates
+  useEffect(() => {
+    const handlePhotoUpdate = (event: CustomEvent) => {
+      setPhotoUrl(event.detail.photoUrl);
+    };
+
+    window.addEventListener('profilePhotoUpdated', handlePhotoUpdate as EventListener);
+    
+    return () => {
+      window.removeEventListener('profilePhotoUpdated', handlePhotoUpdate as EventListener);
+    };
+  }, []);
+
+  // Update photo URL when prop changes
+  useEffect(() => {
+    setPhotoUrl(profilePhoto || null);
+  }, [profilePhoto]);
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -58,15 +80,6 @@ const ProfileDropdown: React.FC<ProfileDropdownProps> = ({
         setIsOpen(false);
       },
       description: 'Manage your account'
-    },
-    {
-      icon: Settings,
-      label: 'Settings',
-      action: () => {
-        navigate('/settings');
-        setIsOpen(false);
-      },
-      description: 'App preferences'
     },
     {
       icon: Shield,
@@ -97,9 +110,13 @@ const ProfileDropdown: React.FC<ProfileDropdownProps> = ({
         className="flex items-center gap-2 px-2 py-1 h-auto hover:bg-white/10 transition-colors"
       >
         <Avatar className="w-8 h-8">
-          <AvatarFallback className="bg-indigo-600 text-white text-sm">
-            {userInitials}
-          </AvatarFallback>
+          {photoUrl ? (
+            <AvatarImage src={`${API_URL}${photoUrl}?t=${Date.now()}`} alt={username} />
+          ) : (
+            <AvatarFallback className="bg-indigo-600 text-white text-sm">
+              {userInitials}
+            </AvatarFallback>
+          )}
         </Avatar>
         <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform duration-200 ${
           isOpen ? 'rotate-180' : ''
@@ -128,9 +145,13 @@ const ProfileDropdown: React.FC<ProfileDropdownProps> = ({
             <div className="px-4 py-3 border-b border-slate-600" style={{ backgroundColor: 'rgb(2, 6, 23)' }}>
               <div className="flex items-center gap-3">
                 <Avatar className="w-10 h-10">
-                  <AvatarFallback className="bg-indigo-600 text-white">
-                    {userInitials}
-                  </AvatarFallback>
+                  {photoUrl ? (
+                    <AvatarImage src={`${API_URL}${photoUrl}?t=${Date.now()}`} alt={username} />
+                  ) : (
+                    <AvatarFallback className="bg-indigo-600 text-white">
+                      {userInitials}
+                    </AvatarFallback>
+                  )}
                 </Avatar>
                 <div>
                   <p className="text-white font-medium text-sm">

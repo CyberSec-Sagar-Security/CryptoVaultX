@@ -9,7 +9,7 @@ import json
 import uuid
 import base64
 from datetime import datetime
-from models import db, File
+from database import File
 from storage_manager import storage_manager
 
 # Configuration
@@ -94,35 +94,32 @@ def upload_encrypted_file():
         if not storage_manager.save_encrypted_file(ciphertext_buffer, storage_path):
             return jsonify({'error': 'Failed to save encrypted file'}), 500
         
-        # Create file record in database with local storage path
-        new_file = File(
-            id=file_id,
+        # Create file record in database using direct PostgreSQL
+        new_file = File.create(
             owner_id=user_id,
             original_filename=original_filename,
-            content_type=file.content_type or 'application/octet-stream',
             size_bytes=file_size,
+            content_type=file.content_type or 'application/octet-stream',
             algo=algo,
             iv=iv_base64,
-            storage_path=storage_path,  # Store local filesystem path instead of blob
-            status='active'
+            storage_path=storage_path  # Store local filesystem path
         )
         
-        db.session.add(new_file)
-        db.session.commit()
+        if not new_file:
+            return jsonify({'error': 'Failed to create file record in database'}), 500
         
         # Log safe metadata only (no plaintext or keys)
-        print(f"✅ Encrypted file stored locally: {file_id} (size: {file_size} bytes, path: {storage_path})")
+        print(f"✅ Encrypted file stored locally: {new_file['id']} (size: {file_size} bytes, path: {storage_path})")
         
         return jsonify({
             'message': 'File uploaded successfully',
-            'id': new_file.id,
-            'original_filename': new_file.original_filename,
-            'size_bytes': new_file.size_bytes,
-            'created_at': new_file.created_at.isoformat()
+            'id': new_file['id'],
+            'original_filename': new_file['original_filename'],
+            'size_bytes': new_file['size_bytes'],
+            'created_at': new_file['created_at'].isoformat()
         }), 201
         
     except Exception as e:
-        db.session.rollback()
         import traceback
         import sys
         error_msg = f"❌ Upload error: {str(e)}"

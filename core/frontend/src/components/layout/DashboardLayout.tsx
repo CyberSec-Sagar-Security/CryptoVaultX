@@ -14,6 +14,11 @@ interface DashboardLayoutProps {
 export const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) => {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
+  const handleToggleSidebar = () => {
+    console.log('DashboardLayout: Toggling sidebar from', sidebarCollapsed, 'to', !sidebarCollapsed);
+    setSidebarCollapsed(!sidebarCollapsed);
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex">
       {/* Sidebar */}
@@ -23,7 +28,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) =>
       <div className="flex-1 flex flex-col">
         {/* Navbar */}
         <Navbar 
-          onToggleSidebar={() => setSidebarCollapsed(!sidebarCollapsed)}
+          onToggleSidebar={handleToggleSidebar}
           sidebarCollapsed={sidebarCollapsed}
         />
         

@@ -11,18 +11,10 @@ import {
   HelpCircle, 
   ArrowLeft,
   Search,
-  FileText,
-  MessageCircle,
-  Mail,
-  Phone,
-  ExternalLink,
   Book,
-  Video,
-  Download,
   ChevronDown,
   ChevronRight,
   Shield,
-  Upload,
   Share2,
   Lock,
   Key,
@@ -207,34 +199,6 @@ const Help: React.FC = () => {
             </CardContent>
           </Card>
 
-          {/* Quick Actions */}
-          <div className="grid md:grid-cols-3 gap-4">
-            <Button 
-              className="h-auto p-6 bg-blue-600 hover:bg-blue-700 flex-col gap-2"
-              onClick={() => window.open('mailto:support@cryptovaultx.com')}
-            >
-              <Mail className="w-6 h-6" />
-              <span>Email Support</span>
-              <span className="text-xs opacity-80">Get help via email</span>
-            </Button>
-            <Button 
-              className="h-auto p-6 bg-green-600 hover:bg-green-700 flex-col gap-2"
-              onClick={() => window.open('/live-chat', '_blank')}
-            >
-              <MessageCircle className="w-6 h-6" />
-              <span>Live Chat</span>
-              <span className="text-xs opacity-80">Chat with our team</span>
-            </Button>
-            <Button 
-              className="h-auto p-6 bg-purple-600 hover:bg-purple-700 flex-col gap-2"
-              onClick={() => window.open('/user-guide.pdf')}
-            >
-              <Download className="w-6 h-6" />
-              <span>User Guide</span>
-              <span className="text-xs opacity-80">Download PDF guide</span>
-            </Button>
-          </div>
-
           {/* Help Topics */}
           <div>
             <h3 className="text-xl font-bold text-white mb-4">Browse by Topic</h3>
@@ -297,120 +261,6 @@ const Help: React.FC = () => {
               ))}
             </div>
           </div>
-
-          {/* Additional Resources */}
-          <div className="grid md:grid-cols-2 gap-6">
-            <Card className="bg-white/10 border-white/20 backdrop-blur-xl">
-              <CardHeader>
-                <CardTitle className="text-white flex items-center gap-2">
-                  <Video className="w-5 h-5" />
-                  Video Tutorials
-                </CardTitle>
-                <CardDescription className="text-gray-400">
-                  Watch step-by-step video guides
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                <div className="flex items-center gap-3 p-3 bg-white/5 rounded-lg">
-                  <div className="w-8 h-8 bg-red-600 rounded flex items-center justify-center">
-                    <Video className="w-4 h-4 text-white" />
-                  </div>
-                  <div className="flex-1">
-                    <p className="text-white text-sm font-medium">Getting Started with CryptoVaultX</p>
-                    <p className="text-gray-400 text-xs">5:30</p>
-                  </div>
-                  <ExternalLink className="w-4 h-4 text-gray-400" />
-                </div>
-                <div className="flex items-center gap-3 p-3 bg-white/5 rounded-lg">
-                  <div className="w-8 h-8 bg-red-600 rounded flex items-center justify-center">
-                    <Video className="w-4 h-4 text-white" />
-                  </div>
-                  <div className="flex-1">
-                    <p className="text-white text-sm font-medium">How to Encrypt and Share Files</p>
-                    <p className="text-gray-400 text-xs">8:15</p>
-                  </div>
-                  <ExternalLink className="w-4 h-4 text-gray-400" />
-                </div>
-                <div className="flex items-center gap-3 p-3 bg-white/5 rounded-lg">
-                  <div className="w-8 h-8 bg-red-600 rounded flex items-center justify-center">
-                    <Video className="w-4 h-4 text-white" />
-                  </div>
-                  <div className="flex-1">
-                    <p className="text-white text-sm font-medium">Advanced Security Settings</p>
-                    <p className="text-gray-400 text-xs">12:45</p>
-                  </div>
-                  <ExternalLink className="w-4 h-4 text-gray-400" />
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card className="bg-white/10 border-white/20 backdrop-blur-xl">
-              <CardHeader>
-                <CardTitle className="text-white flex items-center gap-2">
-                  <Phone className="w-5 h-5" />
-                  Contact Support
-                </CardTitle>
-                <CardDescription className="text-gray-400">
-                  Get in touch with our support team
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div>
-                  <p className="text-white font-medium mb-1">Email Support</p>
-                  <p className="text-gray-400 text-sm">support@cryptovaultx.com</p>
-                  <p className="text-gray-400 text-xs">Response within 24 hours</p>
-                </div>
-                <div>
-                  <p className="text-white font-medium mb-1">Live Chat</p>
-                  <p className="text-gray-400 text-sm">Available 24/7</p>
-                  <p className="text-gray-400 text-xs">Instant support for urgent issues</p>
-                </div>
-                <div>
-                  <p className="text-white font-medium mb-1">Phone Support</p>
-                  <p className="text-gray-400 text-sm">+1 (800) 123-4567</p>
-                  <p className="text-gray-400 text-xs">Business hours: 9 AM - 6 PM EST</p>
-                </div>
-                <Button className="w-full bg-indigo-600 hover:bg-indigo-700">
-                  <MessageCircle className="w-4 h-4 mr-2" />
-                  Start Live Chat
-                </Button>
-              </CardContent>
-            </Card>
-          </div>
-
-          {/* Status and Updates */}
-          <Card className="bg-white/10 border-white/20 backdrop-blur-xl">
-            <CardHeader>
-              <CardTitle className="text-white">System Status</CardTitle>
-              <CardDescription className="text-gray-400">
-                Current system status and recent updates
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="flex items-center gap-2 mb-4">
-                <div className="w-3 h-3 bg-green-500 rounded-full"></div>
-                <span className="text-green-400 font-medium">All systems operational</span>
-              </div>
-              <div className="space-y-2">
-                <div className="flex justify-between items-center py-2 border-b border-white/10">
-                  <span className="text-white">File Upload Service</span>
-                  <Badge className="bg-green-500/20 text-green-400 border-green-500/30">Operational</Badge>
-                </div>
-                <div className="flex justify-between items-center py-2 border-b border-white/10">
-                  <span className="text-white">Encryption Service</span>
-                  <Badge className="bg-green-500/20 text-green-400 border-green-500/30">Operational</Badge>
-                </div>
-                <div className="flex justify-between items-center py-2 border-b border-white/10">
-                  <span className="text-white">File Sharing</span>
-                  <Badge className="bg-green-500/20 text-green-400 border-green-500/30">Operational</Badge>
-                </div>
-                <div className="flex justify-between items-center py-2">
-                  <span className="text-white">API Services</span>
-                  <Badge className="bg-green-500/20 text-green-400 border-green-500/30">Operational</Badge>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
         </motion.div>
       </main>
     </div>

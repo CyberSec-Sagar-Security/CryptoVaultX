@@ -12,33 +12,67 @@ def auth_required(f):
     def decorated_function(*args, **kwargs):
         try:
             # Verify JWT token is present and valid
+            print("[AUTH] Starting authentication check")
             verify_jwt_in_request()
+            print("[AUTH] JWT verified successfully")
             
             # Get user ID from JWT
             current_user_identity = get_jwt_identity()
+            print(f"[AUTH] Got JWT identity: {current_user_identity} (type: {type(current_user_identity)})")
+            
             try:
                 current_user_id = int(current_user_identity)
-            except (TypeError, ValueError):
+                print(f"[AUTH] Converted to user_id: {current_user_id}")
+            except (TypeError, ValueError) as e:
+                print(f"[AUTH] ERROR: Failed to convert identity to int: {e}")
                 return jsonify({
                     'error': 'Invalid token',
                     'message': 'Malformed user identity'
                 }), 401
 
             # Find user in database
+            print(f"[AUTH] Querying database for user_id: {current_user_id}")
             current_user = User.find_by_id(current_user_id)
+            print(f"[AUTH] Database query result: {current_user}")
             
             if not current_user:
+                print(f"[AUTH] ERROR: User not found for user_id: {current_user_id}")
                 return jsonify({
                     'error': 'User not found',
                     'message': 'The user associated with this token no longer exists'
                 }), 401
             
+            # Convert dictionary to object that supports BOTH dot notation AND dictionary access
+            # Some routes use g.current_user.id, others use g.current_user['id']
+            class UserObject:
+                def __init__(self, user_dict):
+                    self._data = user_dict
+                    for key, value in user_dict.items():
+                        setattr(self, key, value)
+                
+                def __getitem__(self, key):
+                    """Support dictionary-style access: g.current_user['id']"""
+                    return self._data[key]
+                
+                def __contains__(self, key):
+                    """Support 'key in g.current_user' checks"""
+                    return key in self._data
+                
+                def get(self, key, default=None):
+                    """Support dict.get() method"""
+                    return self._data.get(key, default)
+            
             # Add user to Flask's g object for access in route functions
-            g.current_user = current_user
+            g.current_user = UserObject(current_user)
+            print(f"[AUTH] Successfully authenticated user: {current_user.get('username', 'unknown')}")
+            print(f"[AUTH] g.current_user has attributes: id={g.current_user.id}, username={g.current_user.username}")
             
             return f(*args, **kwargs)
             
         except Exception as e:
+            print(f"[AUTH] EXCEPTION CAUGHT: {type(e).__name__}: {str(e)}")
+            import traceback
+            print(f"[AUTH] Full traceback:\n{traceback.format_exc()}")
             return jsonify({
                 'error': 'Authentication failed',
                 'message': 'Invalid or expired token'

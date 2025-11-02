@@ -29,7 +29,9 @@ import {
   Video,
   Music,
   Archive,
-  Code
+  Code,
+  CheckSquare,
+  Square
 } from 'lucide-react';
 
 // API Base URL constant
@@ -59,6 +61,7 @@ import {
   deleteFileLocally
 } from '../../lib/localFileStorage';
 import { downloadFileEnhanced } from '../../lib/enhancedDownload';
+import { ShareFileModal } from '../../components/sharing/ShareFileModal';
 
 interface FileItem {
   id: string;
@@ -90,6 +93,19 @@ const FilesPage: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('list');
   const [downloadProgress, setDownloadProgress] = useState<Map<string, DownloadProgress>>(new Map());
+  
+  // Bulk selection state
+  const [selectedFiles, setSelectedFiles] = useState<Set<string>>(new Set());
+  const [isSelectMode, setIsSelectMode] = useState(false);
+  const [isBulkOperating, setIsBulkOperating] = useState(false);
+  const [bulkOperationProgress, setBulkOperationProgress] = useState<string>('');
+  
+  // Share modal state
+  const [isShareModalOpen, setIsShareModalOpen] = useState(false);
+  const [selectedFilesForShare, setSelectedFilesForShare] = useState<{ id: string; filename: string }[]>([]);
+  
+  // Timestamp refresh state - forces re-render of relative times every minute
+  const [, setTimestampTick] = useState(0);
 
   // Fetch files from backend API
   const fetchFiles = async () => {
@@ -136,15 +152,8 @@ const FilesPage: React.FC = () => {
     fetchFiles();
   }, []);
 
-  // Auto-refresh files every 10 seconds for real-time sync
-  useEffect(() => {
-    const interval = setInterval(() => {
-      console.log('🔄 Auto-refreshing files list...');
-      fetchFiles();
-    }, 10000); // Refresh every 10 seconds
-
-    return () => clearInterval(interval);
-  }, []);
+  // NO AUTO-REFRESH - User can manually refresh if needed
+  // Auto-refresh was causing downloads to fail and page to flicker
 
   // Listen for file upload events to refresh the list
   useEffect(() => {
@@ -158,6 +167,15 @@ const FilesPage: React.FC = () => {
     return () => {
       window.removeEventListener('fileUploaded', handleFileUploaded);
     };
+  }, []);
+
+  // Update timestamps every minute to show accurate relative times
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setTimestampTick(tick => tick + 1);
+    }, 60000); // 60 seconds
+
+    return () => clearInterval(interval);
   }, []);
 
   // Filter files based on search query
@@ -202,109 +220,183 @@ const FilesPage: React.FC = () => {
 
   // Format date
   const formatDate = (dateString: string): string => {
-    const date = new Date(dateString);
-    const now = new Date();
-    const diffTime = Math.abs(now.getTime() - date.getTime());
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-
-    if (diffDays === 1) return 'Yesterday';
-    if (diffDays < 7) return `${diffDays} days ago`;
-    return date.toLocaleDateString();
+    try {
+      const date = new Date(dateString);
+      const now = new Date();
+      
+      // Check if date is valid
+      if (isNaN(date.getTime())) {
+        return 'Recently';
+      }
+      
+      // Calculate time difference
+      const diffMs = now.getTime() - date.getTime();
+      const diffMinutes = Math.floor(diffMs / (1000 * 60));
+      const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+      const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+      
+      // Return formatted relative time
+      if (diffMinutes < 1) return 'Just now';
+      if (diffMinutes < 60) return `${diffMinutes} ${diffMinutes === 1 ? 'minute' : 'minutes'} ago`;
+      if (diffHours < 24) return `${diffHours} ${diffHours === 1 ? 'hour' : 'hours'} ago`;
+      if (diffDays === 1) return 'Yesterday';
+      if (diffDays < 7) return `${diffDays} days ago`;
+      if (diffDays < 30) {
+        const weeks = Math.floor(diffDays / 7);
+        return `${weeks} ${weeks === 1 ? 'week' : 'weeks'} ago`;
+      }
+      
+      // For older dates, show full date
+      return date.toLocaleDateString('en-US', { 
+        year: 'numeric', 
+        month: 'short', 
+        day: 'numeric' 
+      });
+    } catch (error) {
+      return 'Recently';
+    }
   };
 
-  // Download and decrypt file from backend
+  // Download and decrypt file from backend with REAL-TIME PROGRESS
   const downloadFile = async (file: FileItem) => {
     const progressKey = file.id;
     
     try {
-      console.log('📥 Starting download for:', file.filename);
+      console.log('📥 Starting download for:', file.filename, `(${(file.size / 1024 / 1024).toFixed(2)} MB)`);
       
-      // Set initial progress
+      // Initialize progress
       setDownloadProgress(prev => new Map(prev.set(progressKey, {
         fileId: file.id,
         progress: 0,
         status: 'starting'
       })));
       
-      // Step 1: Download encrypted file from backend using direct fetch
+      const token = localStorage.getItem('access_token');
+      if (!token) throw new Error('No authentication token found');
+      
+      // Start fetching
       setDownloadProgress(prev => new Map(prev.set(progressKey, {
         fileId: file.id,
-        progress: 20,
+        progress: 5,
         status: 'downloading'
       })));
       
       console.log('📥 Fetching encrypted file from backend...');
-      const token = localStorage.getItem('access_token');
-      const response = await fetch(`${API_BASE_URL}/files/${file.id}`, {
+      const response = await fetch(`${API_BASE_URL}/files/${file.id}/download`, {
         method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
+        headers: { 'Authorization': `Bearer ${token}` }
       });
       
       if (!response.ok) {
-        throw new Error(`Failed to download file from server: ${response.status} ${response.statusText}`);
+        throw new Error(`Server error: ${response.status} ${response.statusText}`);
       }
       
-      // Step 2: Get file data and metadata from headers
-      const encryptedData = await response.arrayBuffer();
+      // Get metadata from headers
       const fileName = response.headers.get('X-File-Name') || file.filename;
-      const iv = response.headers.get('X-File-IV');
-      const algo = response.headers.get('X-File-Algo') || 'AES-256-GCM';
+      const ivBase64 = response.headers.get('X-File-IV');
+      const contentLength = parseInt(response.headers.get('Content-Length') || '0', 10);
       
-      console.log('📥 Downloaded encrypted data:', encryptedData.byteLength, 'bytes');
-      console.log('📥 File metadata - Name:', fileName, 'IV:', iv, 'Algo:', algo);
-      
-      if (!iv) {
-        throw new Error('Missing encryption metadata (IV not found in response headers)');
+      if (!ivBase64) {
+        throw new Error('Missing encryption IV in response headers');
       }
       
+      console.log('📥 File metadata - Name:', fileName, 'Size:', contentLength, 'bytes');
+      
+      // Read response with REAL-TIME progress tracking using ReadableStream
+      const reader = response.body?.getReader();
+      if (!reader) {
+        throw new Error('Response body is not readable');
+      }
+      
+      const chunks: Uint8Array[] = [];
+      let receivedLength = 0;
+      
+      while (true) {
+        const { done, value } = await reader.read();
+        
+        if (done) break;
+        
+        chunks.push(value);
+        receivedLength += value.length;
+        
+        // Update REAL-TIME progress (10% to 60% during download)
+        const downloadProgress = contentLength > 0 
+          ? 10 + Math.floor((receivedLength / contentLength) * 50)
+          : 10 + Math.min(Math.floor((receivedLength / file.size) * 50), 50);
+        
+        setDownloadProgress(prev => new Map(prev.set(progressKey, {
+          fileId: file.id,
+          progress: downloadProgress,
+          status: 'downloading'
+        })));
+      }
+      
+      console.log('📥 Downloaded:', receivedLength, 'bytes in', chunks.length, 'chunks');
+      
+      // Combine chunks into single ArrayBuffer
       setDownloadProgress(prev => new Map(prev.set(progressKey, {
         fileId: file.id,
-        progress: 50,
+        progress: 65,
+        status: 'processing'
+      })));
+      
+      const encryptedData = new Uint8Array(receivedLength);
+      let position = 0;
+      for (const chunk of chunks) {
+        encryptedData.set(chunk, position);
+        position += chunk.length;
+      }
+      
+      console.log('📦 Encrypted data assembled:', encryptedData.byteLength, 'bytes');
+      
+      // Decrypt file
+      setDownloadProgress(prev => new Map(prev.set(progressKey, {
+        fileId: file.id,
+        progress: 70,
         status: 'decrypting'
       })));
       
-      // Step 3: Decrypt file using session key
       console.log('🔓 Decrypting file...');
       const sessionKey = await getSessionKey('HIGH');
+      const ivBuffer = base64ToArrayBuffer(ivBase64);
+      
       const decryptedData = await decryptFile(
-        encryptedData,
-        base64ToArrayBuffer(iv),
+        encryptedData.buffer,
+        ivBuffer,
         sessionKey,
         'HIGH'
       );
       
       console.log('✅ Decryption successful! Size:', decryptedData.byteLength, 'bytes');
       
+      // Save file
       setDownloadProgress(prev => new Map(prev.set(progressKey, {
         fileId: file.id,
-        progress: 80,
+        progress: 90,
         status: 'saving'
       })));
       
-      // Step 4: Create and download file with original name and format
       const blob = new Blob([decryptedData], { type: file.content_type || 'application/octet-stream' });
       const url = URL.createObjectURL(blob);
       
       const a = document.createElement('a');
       a.href = url;
-      a.download = fileName; // Original filename (e.g., document.pdf)
+      a.download = fileName;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
       
+      // Complete
       setDownloadProgress(prev => new Map(prev.set(progressKey, {
         fileId: file.id,
         progress: 100,
         status: 'completed'
       })));
       
-      console.log(`✅ File downloaded and decrypted: ${fileName}`);
+      console.log('🎉 File downloaded and decrypted:', fileName);
 
-      // Remove progress after delay
+      // Clear progress after 3 seconds
       setTimeout(() => {
         setDownloadProgress(prev => {
           const newMap = new Map(prev);
@@ -370,12 +462,165 @@ const FilesPage: React.FC = () => {
       setFiles(prev => prev.filter(f => f.id !== file.id));
       console.log('✅ File removed from UI');
       
+      // Dispatch event to notify dashboard and other components
+      window.dispatchEvent(new CustomEvent('fileDeleted', { 
+        detail: { fileId: file.id, filename: file.filename }
+      }));
+      window.dispatchEvent(new CustomEvent('storageChanged'));
+      console.log('📡 File deletion event dispatched');
+      
       // Refresh list to ensure synchronization
       await fetchFiles();
     } catch (error) {
       console.error('❌ Delete error:', error);
       setError(error instanceof Error ? error.message : 'Failed to delete file');
     }
+  };
+  
+  // Open share modal for a single file
+  const handleShareFile = (file: FileItem) => {
+    setSelectedFilesForShare([{ id: file.id, filename: file.filename }]);
+    setIsShareModalOpen(true);
+  };
+  
+  // Handle share completion
+  const handleShareComplete = () => {
+    console.log('✅ File(s) shared successfully');
+    // Optionally refresh the file list or show a success notification
+    fetchFiles();
+  };
+
+  // Toggle select mode
+  const toggleSelectMode = () => {
+    setIsSelectMode(!isSelectMode);
+    setSelectedFiles(new Set());
+  };
+
+  // Toggle file selection
+  const toggleFileSelection = (fileId: string) => {
+    const newSelection = new Set(selectedFiles);
+    if (newSelection.has(fileId)) {
+      newSelection.delete(fileId);
+    } else {
+      newSelection.add(fileId);
+    }
+    setSelectedFiles(newSelection);
+  };
+
+  // Select all filtered files
+  const selectAll = () => {
+    const allFileIds = new Set(filteredFiles.map(f => f.id));
+    setSelectedFiles(allFileIds);
+  };
+
+  // Deselect all
+  const deselectAll = () => {
+    setSelectedFiles(new Set());
+  };
+
+  // Bulk Download
+  const handleBulkDownload = async () => {
+    if (selectedFiles.size === 0) {
+      setError('No files selected for download');
+      return;
+    }
+
+    setIsBulkOperating(true);
+    setBulkOperationProgress('Starting bulk download...');
+    
+    try {
+      const selectedFilesList = Array.from(selectedFiles);
+      let successCount = 0;
+      let failCount = 0;
+
+      for (let i = 0; i < selectedFilesList.length; i++) {
+        const fileId = selectedFilesList[i];
+        const file = files.find(f => f.id === fileId);
+        
+        if (!file) continue;
+
+        setBulkOperationProgress(`Downloading ${i + 1}/${selectedFilesList.length}: ${file.filename}`);
+        
+        try {
+          await downloadFile(file);
+          successCount++;
+          await new Promise(resolve => setTimeout(resolve, 500));
+        } catch (err) {
+          console.error(`Failed to download ${file.filename}:`, err);
+          failCount++;
+        }
+      }
+
+      setBulkOperationProgress(`Download complete: ${successCount} succeeded, ${failCount} failed`);
+      setTimeout(() => {
+        setIsBulkOperating(false);
+        setBulkOperationProgress('');
+        setSelectedFiles(new Set());
+        setIsSelectMode(false);
+      }, 3000);
+    } catch (err) {
+      console.error('Bulk download error:', err);
+      setError(err instanceof Error ? err.message : 'Bulk download failed');
+      setIsBulkOperating(false);
+    }
+  };
+
+  // Bulk Delete
+  const handleBulkDelete = async () => {
+    if (selectedFiles.size === 0) {
+      setError('No files selected for deletion');
+      return;
+    }
+
+    if (!confirm(`Are you sure you want to delete ${selectedFiles.size} file(s)? This action cannot be undone.`)) {
+      return;
+    }
+
+    setIsBulkOperating(true);
+    setBulkOperationProgress('Starting bulk delete...');
+    
+    try {
+      const response = await apiRequest('/files/bulk-delete', {
+        method: 'POST',
+        body: JSON.stringify({
+          file_ids: Array.from(selectedFiles)
+        })
+      });
+
+      if (response.success) {
+        setBulkOperationProgress(`Deleted ${response.deleted_count} file(s) successfully`);
+        
+        // Dispatch events to notify other components (Dashboard)
+        window.dispatchEvent(new CustomEvent('fileDeleted'));
+        window.dispatchEvent(new CustomEvent('storageChanged'));
+        
+        setTimeout(() => {
+          setIsBulkOperating(false);
+          setBulkOperationProgress('');
+          setSelectedFiles(new Set());
+          setIsSelectMode(false);
+          fetchFiles();
+        }, 2000);
+      } else {
+        throw new Error(response.message || 'Bulk delete failed');
+      }
+    } catch (err) {
+      console.error('Bulk delete error:', err);
+      setError(err instanceof Error ? err.message : 'Bulk delete failed');
+      setIsBulkOperating(false);
+    }
+  };
+
+  // Bulk Share
+  const handleBulkShare = () => {
+    if (selectedFiles.size === 0) {
+      setError('No files selected for sharing');
+      return;
+    }
+    
+    const selectedFilesList = files.filter(f => selectedFiles.has(f.id));
+    setSelectedFilesForShare(selectedFilesList.map(f => ({ id: f.id, filename: f.filename })));
+    setIsShareModalOpen(true);
   };
 
   if (loading) {
@@ -435,6 +680,15 @@ const FilesPage: React.FC = () => {
           
           <div className="flex items-center gap-2">
             <Button
+              onClick={toggleSelectMode}
+              variant={isSelectMode ? 'default' : 'ghost'}
+              size="sm"
+              className={isSelectMode ? 'bg-indigo-600 hover:bg-indigo-700' : 'text-gray-400 hover:text-white'}
+            >
+              <CheckSquare className="w-4 h-4 mr-2" />
+              {isSelectMode ? 'Exit Select' : 'Select'}
+            </Button>
+            <Button
               variant={viewMode === 'list' ? 'default' : 'ghost'}
               size="sm"
               onClick={() => setViewMode('list')}
@@ -452,6 +706,84 @@ const FilesPage: React.FC = () => {
             </Button>
           </div>
         </div>
+
+        {/* Bulk Actions Bar */}
+        {isSelectMode && (
+          <motion.div
+            initial={{ opacity: 0, y: -20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="mb-6"
+          >
+            <Card className="bg-indigo-600/20 border-indigo-500/30 backdrop-blur-xl">
+              <CardContent className="py-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-4">
+                    <span className="text-white font-medium">
+                      {selectedFiles.size} file(s) selected
+                    </span>
+                    {selectedFiles.size > 0 && (
+                      <div className="flex gap-2">
+                        <Button
+                          size="sm"
+                          onClick={handleBulkDownload}
+                          disabled={isBulkOperating}
+                          className="bg-green-600 hover:bg-green-700"
+                        >
+                          <Download className="w-4 h-4 mr-2" />
+                          Download
+                        </Button>
+                        <Button
+                          size="sm"
+                          onClick={handleBulkShare}
+                          disabled={isBulkOperating}
+                          className="bg-blue-600 hover:bg-blue-700"
+                        >
+                          <Share2 className="w-4 h-4 mr-2" />
+                          Share
+                        </Button>
+                        <Button
+                          size="sm"
+                          onClick={handleBulkDelete}
+                          disabled={isBulkOperating}
+                          className="bg-red-600 hover:bg-red-700"
+                        >
+                          <Trash2 className="w-4 h-4 mr-2" />
+                          Delete
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+                  
+                  <div className="flex gap-2">
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={selectAll}
+                      className="text-white hover:text-white/80"
+                    >
+                      Select All
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={deselectAll}
+                      className="text-white hover:text-white/80"
+                    >
+                      Clear
+                    </Button>
+                  </div>
+                </div>
+                
+                {isBulkOperating && (
+                  <div className="mt-4">
+                    <p className="text-white text-sm mb-2">{bulkOperationProgress}</p>
+                    <Progress value={50} className="h-2" />
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </motion.div>
+        )}
 
         {/* Error Display */}
         {error && (
@@ -494,6 +826,7 @@ const FilesPage: React.FC = () => {
                 <AnimatePresence>
                   {filteredFiles.map((file, index) => {
                     const progress = downloadProgress.get(file.id);
+                    const isSelected = selectedFiles.has(file.id);
                     
                     return (
                       <motion.div
@@ -502,9 +835,24 @@ const FilesPage: React.FC = () => {
                         animate={{ opacity: 1, y: 0 }}
                         exit={{ opacity: 0, y: -20 }}
                         transition={{ delay: index * 0.05 }}
-                        className="flex items-center justify-between p-4 bg-white/5 rounded-lg border border-white/10 hover:bg-white/10 transition-colors group"
+                        className={`flex items-center justify-between p-4 rounded-lg border transition-all group ${
+                          isSelected
+                            ? 'bg-indigo-600/20 border-indigo-500/50'
+                            : 'bg-white/5 border-white/10 hover:bg-white/10'
+                        }`}
+                        onClick={() => isSelectMode && toggleFileSelection(file.id)}
+                        style={{ cursor: isSelectMode ? 'pointer' : 'default' }}
                       >
                         <div className="flex items-center gap-4">
+                          {isSelectMode && (
+                            <div onClick={(e) => e.stopPropagation()}>
+                              {isSelected ? (
+                                <CheckSquare className="w-6 h-6 text-indigo-400" />
+                              ) : (
+                                <Square className="w-6 h-6 text-gray-400" />
+                              )}
+                            </div>
+                          )}
                           {getFileIcon(file)}
                           <div>
                             <h4 className="font-medium text-white group-hover:text-indigo-400 transition-colors">
@@ -545,32 +893,36 @@ const FilesPage: React.FC = () => {
                             </div>
                           )}
                           
-                          <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                            <Button 
-                              size="sm" 
-                              variant="ghost" 
-                              className="text-gray-400 hover:text-white h-8 w-8 p-0"
-                              onClick={() => downloadFile(file)}
-                              disabled={!!progress && progress.status !== 'error'}
-                            >
-                              <Download size={14} />
-                            </Button>
-                            <Button 
-                              size="sm" 
-                              variant="ghost" 
-                              className="text-gray-400 hover:text-white h-8 w-8 p-0"
-                            >
-                              <Share2 size={14} />
-                            </Button>
-                            <Button 
-                              size="sm" 
-                              variant="ghost" 
-                              className="text-gray-400 hover:text-red-400 h-8 w-8 p-0"
-                              onClick={() => deleteFile(file)}
-                            >
-                              <Trash2 size={14} />
-                            </Button>
-                          </div>
+                          {!isSelectMode && (
+                            <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                              <Button 
+                                size="sm" 
+                                variant="ghost" 
+                                className="text-gray-400 hover:text-white h-8 w-8 p-0"
+                                onClick={() => downloadFile(file)}
+                                disabled={!!progress && progress.status !== 'error'}
+                              >
+                                <Download size={14} />
+                              </Button>
+                              <Button 
+                                size="sm" 
+                                variant="ghost" 
+                                className="text-gray-400 hover:text-white h-8 w-8 p-0"
+                                onClick={() => handleShareFile(file)}
+                                title="Share file"
+                              >
+                                <Share2 size={14} />
+                              </Button>
+                              <Button 
+                                size="sm" 
+                                variant="ghost" 
+                                className="text-gray-400 hover:text-red-400 h-8 w-8 p-0"
+                                onClick={() => deleteFile(file)}
+                              >
+                                <Trash2 size={14} />
+                              </Button>
+                            </div>
+                          )}
                         </div>
                       </motion.div>
                     );
@@ -581,6 +933,18 @@ const FilesPage: React.FC = () => {
           </Card>
         )}
       </main>
+      
+      {/* Share File Modal */}
+      <ShareFileModal
+        isOpen={isShareModalOpen}
+        onClose={() => {
+          setIsShareModalOpen(false);
+          setSelectedFilesForShare([]);
+        }}
+        fileIds={selectedFilesForShare.map(f => f.id)}
+        fileNames={selectedFilesForShare.map(f => f.filename)}
+        onShareComplete={handleShareComplete}
+      />
     </div>
   );
 };

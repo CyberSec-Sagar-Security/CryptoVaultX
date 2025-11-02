@@ -1,0 +1,627 @@
+/**
+ * Profile Settings Page - Complete User Profile Management
+ * Path: src/pages/profile/Profile.tsx
+ * Features: Photo upload, profile editing, dark mode, account deletion
+ */
+
+import React, { useState, useEffect, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { motion, AnimatePresence } from 'framer-motion';
+import { 
+  User, 
+  Mail, 
+  Phone, 
+  Calendar, 
+  Palette, 
+  Globe,
+  ArrowLeft,
+  Edit3,
+  Save,
+  Camera,
+  Key,
+  Trash2,
+  X,
+  Upload,
+  AlertTriangle
+} from 'lucide-react';
+import { Button } from '../../components/ui/button';
+import { Input } from '../../components/ui/input';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../components/ui/card';
+import { Badge } from '../../components/ui/badge';
+import { Avatar, AvatarFallback, AvatarImage } from '../../components/ui/avatar';
+import { Switch } from '../../components/ui/switch';
+import axios from 'axios';
+
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+
+interface ConfirmDialogProps {
+  isOpen: boolean;
+  title: string;
+  message: string;
+  onConfirm: () => void;
+  onCancel: () => void;
+  confirmText?: string;
+  cancelText?: string;
+  variant?: 'danger' | 'warning';
+}
+
+const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
+  isOpen,
+  title,
+  message,
+  onConfirm,
+  onCancel,
+  confirmText = 'Confirm',
+  cancelText = 'Cancel',
+  variant = 'danger'
+}) => {
+  if (!isOpen) return null;
+
+  return (
+    <AnimatePresence>
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+        onClick={onCancel}
+      >
+        <motion.div
+          initial={{ scale: 0.95, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          exit={{ scale: 0.95, opacity: 0 }}
+          onClick={(e) => e.stopPropagation()}
+          className={`bg-slate-800 border ${variant === 'danger' ? 'border-red-500/30' : 'border-yellow-500/30'} rounded-lg p-6 max-w-md w-full shadow-2xl`}
+        >
+          <div className="flex items-start gap-4">
+            <div className={`p-2 rounded-full ${variant === 'danger' ? 'bg-red-500/20' : 'bg-yellow-500/20'}`}>
+              <AlertTriangle className={`w-6 h-6 ${variant === 'danger' ? 'text-red-500' : 'text-yellow-500'}`} />
+            </div>
+            <div className="flex-1">
+              <h3 className="text-xl font-bold text-white mb-2">{title}</h3>
+              <p className="text-gray-400 mb-6">{message}</p>
+              <div className="flex gap-3 justify-end">
+                <Button
+                  onClick={onCancel}
+                  variant="outline"
+                  className="border-white/20 text-white hover:bg-white/10"
+                >
+                  {cancelText}
+                </Button>
+                <Button
+                  onClick={onConfirm}
+                  className={variant === 'danger' ? 'bg-red-600 hover:bg-red-700' : 'bg-yellow-600 hover:bg-yellow-700'}
+                >
+                  {confirmText}
+                </Button>
+              </div>
+            </div>
+          </div>
+        </motion.div>
+      </motion.div>
+    </AnimatePresence>
+  );
+};
+
+const Profile: React.FC = () => {
+  const navigate = useNavigate();
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [isEditing, setIsEditing] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [deletingAccount, setDeletingAccount] = useState(false);
+  
+  // Get user data from localStorage
+  const userData = localStorage.getItem('user');
+  const user = userData ? JSON.parse(userData) : null;
+  const token = localStorage.getItem('token');
+
+  const [profileData, setProfileData] = useState({
+    username: user?.username || '',
+    email: user?.email || '',
+    phone: user?.phone || '',
+    joinDate: user?.created_at ? new Date(user.created_at).toLocaleDateString('en-US', { month: 'long', year: 'numeric' }) : 'Unknown',
+    darkMode: localStorage.getItem('darkMode') === 'true',
+    language: localStorage.getItem('language') || 'English',
+    profilePhoto: user?.profile_photo || null
+  });
+
+  const [previewPhoto, setPreviewPhoto] = useState<string | null>(null);
+
+  const userInitials = profileData.username 
+    ? profileData.username.slice(0, 2).toUpperCase() 
+    : 'U';
+
+  // Load profile data from backend
+  useEffect(() => {
+    loadProfile();
+  }, []);
+
+  // Apply dark mode
+  useEffect(() => {
+    if (profileData.darkMode) {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
+  }, [profileData.darkMode]);
+
+  const loadProfile = async () => {
+    try {
+      const response = await axios.get(`${API_URL}/api/users/profile`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      if (response.data.success) {
+        const userData = response.data.user;
+        setProfileData(prev => ({
+          ...prev,
+          username: userData.username,
+          email: userData.email,
+          phone: userData.phone || '',
+          profilePhoto: userData.profile_photo,
+          darkMode: userData.preferences?.darkMode ?? prev.darkMode,
+          language: userData.preferences?.language || prev.language,
+          joinDate: new Date(userData.created_at).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
+        }));
+
+        // Update localStorage
+        localStorage.setItem('user', JSON.stringify(userData));
+      }
+    } catch (error) {
+      console.error('Error loading profile:', error);
+    }
+  };
+
+  const handleSave = async () => {
+    setLoading(true);
+    try {
+      // Update profile information
+      const response = await axios.put(
+        `${API_URL}/api/users/profile`,
+        {
+          username: profileData.username,
+          email: profileData.email,
+          phone: profileData.phone
+        },
+        {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          }
+        }
+      );
+
+      if (response.data.success) {
+        // Update localStorage
+        const updatedUser = response.data.user;
+        localStorage.setItem('user', JSON.stringify(updatedUser));
+        
+        setIsEditing(false);
+        alert('Profile updated successfully!');
+      }
+    } catch (error: any) {
+      console.error('Error updating profile:', error);
+      alert(error.response?.data?.message || 'Failed to update profile');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handlePhotoClick = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handlePhotoChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    // Validate file type
+    const allowedTypes = ['image/png', 'image/jpeg', 'image/jpg', 'image/gif', 'image/webp'];
+    if (!allowedTypes.includes(file.type)) {
+      alert('Invalid file type. Please upload PNG, JPG, JPEG, GIF, or WEBP images.');
+      return;
+    }
+
+    // Validate file size (5MB max)
+    if (file.size > 5 * 1024 * 1024) {
+      alert('File too large. Maximum size is 5MB.');
+      return;
+    }
+
+    // Show preview
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      setPreviewPhoto(reader.result as string);
+    };
+    reader.readAsDataURL(file);
+
+    // Upload photo
+    setUploadingPhoto(true);
+    try {
+      const formData = new FormData();
+      formData.append('photo', file);
+
+      const response = await axios.post(
+        `${API_URL}/api/users/profile/photo`,
+        formData,
+        {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'multipart/form-data'
+          }
+        }
+      );
+
+      if (response.data.success) {
+        setProfileData(prev => ({ ...prev, profilePhoto: response.data.photo_url }));
+        
+        // Update user data in localStorage
+        const currentUser = JSON.parse(localStorage.getItem('user') || '{}');
+        currentUser.profile_photo = response.data.photo_url;
+        localStorage.setItem('user', JSON.stringify(currentUser));
+        
+        // Trigger a custom event to notify other components
+        window.dispatchEvent(new CustomEvent('profilePhotoUpdated', { 
+          detail: { photoUrl: response.data.photo_url } 
+        }));
+        
+        alert('Profile photo updated successfully!');
+      }
+    } catch (error: any) {
+      console.error('Error uploading photo:', error);
+      alert(error.response?.data?.message || 'Failed to upload photo');
+      setPreviewPhoto(null);
+    } finally {
+      setUploadingPhoto(false);
+    }
+  };
+
+  const handleDarkModeToggle = async (checked: boolean) => {
+    setProfileData(prev => ({ ...prev, darkMode: checked }));
+    localStorage.setItem('darkMode', checked.toString());
+
+    // Update on backend
+    try {
+      await axios.put(
+        `${API_URL}/api/users/preferences`,
+        { darkMode: checked },
+        {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          }
+        }
+      );
+    } catch (error) {
+      console.error('Error updating dark mode preference:', error);
+    }
+  };
+
+  const handleLanguageChange = async (language: string) => {
+    setProfileData(prev => ({ ...prev, language }));
+    localStorage.setItem('language', language);
+
+    // Update on backend
+    try {
+      await axios.put(
+        `${API_URL}/api/users/preferences`,
+        { language },
+        {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          }
+        }
+      );
+    } catch (error) {
+      console.error('Error updating language preference:', error);
+    }
+  };
+
+  const handleDeleteAccount = async () => {
+    setDeletingAccount(true);
+    try {
+      const response = await axios.delete(`${API_URL}/api/users/account`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      if (response.data.success) {
+        // Clear all data
+        localStorage.clear();
+        
+        // Redirect to login
+        navigate('/login');
+        
+        alert('Your account has been deleted successfully.');
+      }
+    } catch (error: any) {
+      console.error('Error deleting account:', error);
+      alert(error.response?.data?.message || 'Failed to delete account');
+    } finally {
+      setDeletingAccount(false);
+      setShowDeleteDialog(false);
+    }
+  };
+
+  const getProfilePhotoUrl = () => {
+    if (previewPhoto) return previewPhoto;
+    if (profileData.profilePhoto) {
+      return `${API_URL}${profileData.profilePhoto}?t=${Date.now()}`;
+    }
+    return null;
+  };
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
+      {/* Header */}
+      <header className="border-b border-white/10 bg-white/5 backdrop-blur-xl">
+        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex items-center h-16 gap-4">
+            <Button
+              onClick={() => navigate('/dashboard')}
+              size="sm"
+              variant="ghost"
+              className="text-gray-400 hover:text-white"
+            >
+              <ArrowLeft className="w-4 h-4 mr-2" />
+              Back to Dashboard
+            </Button>
+            <h1 className="text-xl font-bold text-white">Profile Settings</h1>
+          </div>
+        </div>
+      </header>
+
+      {/* Main Content */}
+      <main className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="space-y-6"
+        >
+          {/* Profile Header Card */}
+          <Card className="bg-white/10 border-white/20 backdrop-blur-xl">
+            <CardContent className="pt-6">
+              <div className="flex items-center gap-6">
+                <div className="relative">
+                  <Avatar className="w-24 h-24 cursor-pointer" onClick={handlePhotoClick}>
+                    {getProfilePhotoUrl() ? (
+                      <AvatarImage src={getProfilePhotoUrl()!} alt={profileData.username} />
+                    ) : (
+                      <AvatarFallback className="bg-indigo-600 text-white text-2xl">
+                        {userInitials}
+                      </AvatarFallback>
+                    )}
+                  </Avatar>
+                  <Button
+                    size="sm"
+                    onClick={handlePhotoClick}
+                    disabled={uploadingPhoto}
+                    className="absolute -bottom-2 -right-2 w-8 h-8 rounded-full bg-indigo-600 hover:bg-indigo-700"
+                  >
+                    {uploadingPhoto ? (
+                      <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    ) : (
+                      <Camera className="w-4 h-4" />
+                    )}
+                  </Button>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/png,image/jpeg,image/jpg,image/gif,image/webp"
+                    onChange={handlePhotoChange}
+                    className="hidden"
+                  />
+                </div>
+                <div className="flex-1">
+                  <h2 className="text-2xl font-bold text-white mb-1">{profileData.username}</h2>
+                  <p className="text-gray-400 mb-2">{profileData.email}</p>
+                  <Badge className="bg-green-500/20 text-green-400 border-green-500/30">
+                    Active Account
+                  </Badge>
+                </div>
+                <div className="flex gap-2">
+                  {isEditing ? (
+                    <>
+                      <Button 
+                        onClick={handleSave} 
+                        disabled={loading}
+                        className="bg-green-600 hover:bg-green-700"
+                      >
+                        <Save className="w-4 h-4 mr-2" />
+                        {loading ? 'Saving...' : 'Save'}
+                      </Button>
+                      <Button 
+                        onClick={() => {
+                          setIsEditing(false);
+                          loadProfile(); // Reload original data
+                        }} 
+                        variant="outline"
+                        disabled={loading}
+                        className="border-white/20 text-white hover:bg-white/10"
+                      >
+                        Cancel
+                      </Button>
+                    </>
+                  ) : (
+                    <Button 
+                      onClick={() => setIsEditing(true)}
+                      className="bg-indigo-600 hover:bg-indigo-700"
+                    >
+                      <Edit3 className="w-4 h-4 mr-2" />
+                      Edit Profile
+                    </Button>
+                  )}
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <div className="grid md:grid-cols-2 gap-6">
+            {/* Personal Information */}
+            <Card className="bg-white/10 border-white/20 backdrop-blur-xl">
+              <CardHeader>
+                <CardTitle className="text-white flex items-center gap-2">
+                  <User className="w-5 h-5" />
+                  Personal Information
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">Username</label>
+                  <Input
+                    value={profileData.username}
+                    onChange={(e) => setProfileData({...profileData, username: e.target.value})}
+                    disabled={!isEditing}
+                    className="bg-white/10 border-white/20 text-white disabled:opacity-60"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">Email</label>
+                  <Input
+                    value={profileData.email}
+                    onChange={(e) => setProfileData({...profileData, email: e.target.value})}
+                    disabled={!isEditing}
+                    className="bg-white/10 border-white/20 text-white disabled:opacity-60"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">Phone</label>
+                  <Input
+                    value={profileData.phone}
+                    onChange={(e) => setProfileData({...profileData, phone: e.target.value})}
+                    disabled={!isEditing}
+                    placeholder="Enter phone number"
+                    className="bg-white/10 border-white/20 text-white disabled:opacity-60"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">Member Since</label>
+                  <div className="flex items-center gap-2 text-gray-400">
+                    <Calendar className="w-4 h-4" />
+                    {profileData.joinDate}
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Security Settings */}
+            <Card className="bg-white/10 border-white/20 backdrop-blur-xl">
+              <CardHeader>
+                <CardTitle className="text-white flex items-center gap-2">
+                  <Key className="w-5 h-5" />
+                  Security
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <Button 
+                  className="w-full bg-yellow-600 hover:bg-yellow-700"
+                  onClick={() => navigate('/change-password')}
+                >
+                  <Key className="w-4 h-4 mr-2" />
+                  Change Password
+                </Button>
+                <div className="pt-4 border-t border-white/10">
+                  <p className="text-gray-400 text-sm">
+                    Keep your account secure by using a strong password and changing it regularly.
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* App Preferences */}
+            <Card className="bg-white/10 border-white/20 backdrop-blur-xl md:col-span-2">
+              <CardHeader>
+                <CardTitle className="text-white flex items-center gap-2">
+                  <Palette className="w-5 h-5" />
+                  Preferences
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid md:grid-cols-2 gap-6">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-white font-medium">Dark Mode</p>
+                      <p className="text-gray-400 text-sm">Use dark theme</p>
+                    </div>
+                    <Switch
+                      checked={profileData.darkMode}
+                      onCheckedChange={handleDarkModeToggle}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-300 mb-2">
+                      <Globe className="w-4 h-4 inline mr-2" />
+                      Language
+                    </label>
+                    <select 
+                      value={profileData.language}
+                      onChange={(e) => handleLanguageChange(e.target.value)}
+                      className="w-full bg-white/10 border border-white/20 text-white rounded-md px-3 py-2"
+                    >
+                      <option value="English" className="bg-slate-800">English</option>
+                      <option value="Spanish" className="bg-slate-800">Español</option>
+                      <option value="French" className="bg-slate-800">Français</option>
+                      <option value="German" className="bg-slate-800">Deutsch</option>
+                      <option value="Hindi" className="bg-slate-800">हिन्दी</option>
+                    </select>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Danger Zone */}
+          <Card className="bg-red-500/10 border-red-500/20 backdrop-blur-xl">
+            <CardHeader>
+              <CardTitle className="text-red-400 flex items-center gap-2">
+                <Trash2 className="w-5 h-5" />
+                Danger Zone
+              </CardTitle>
+              <CardDescription className="text-red-300/70">
+                These actions cannot be undone. Please be careful.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="text-white font-medium mb-1">Delete Account</h3>
+                  <p className="text-gray-400 text-sm">
+                    Permanently delete your account and all associated data including files and shares.
+                  </p>
+                </div>
+                <Button 
+                  variant="destructive"
+                  onClick={() => setShowDeleteDialog(true)}
+                  className="bg-red-600 hover:bg-red-700"
+                >
+                  <Trash2 className="w-4 h-4 mr-2" />
+                  Delete Account
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </motion.div>
+      </main>
+
+      {/* Delete Account Confirmation Dialog */}
+      <ConfirmDialog
+        isOpen={showDeleteDialog}
+        title="Delete Account"
+        message="Are you sure you want to delete your account? This will permanently delete all your files, shares, and personal data. This action cannot be undone."
+        onConfirm={handleDeleteAccount}
+        onCancel={() => setShowDeleteDialog(false)}
+        confirmText={deletingAccount ? 'Deleting...' : 'Yes, Delete My Account'}
+        cancelText="Cancel"
+        variant="danger"
+      />
+    </div>
+  );
+};
+
+export default Profile;

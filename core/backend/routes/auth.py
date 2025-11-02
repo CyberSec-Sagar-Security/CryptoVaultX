@@ -87,39 +87,44 @@ def register():
         if existing_user:
             return jsonify({'message': 'Email already registered'}), 409
             
-        # Check if username exists (query directly since find_by_username doesn't exist)
-        existing_user = User.query.filter_by(username=username).first()
+        # Check if username exists
+        existing_user = User.find_by_username(username)
         if existing_user:
             return jsonify({'message': 'Username already taken'}), 409
         
-        # Create new user with SQLAlchemy
-        new_user = User(
+        # Create new user using database.py
+        new_user = User.create(
             username=username,
-            name=username,  # Use username as display name for now
-            email=email.lower()
+            email=email.lower(),
+            password=password,
+            name=username  # Use username as display name for now
         )
-        new_user.set_password(password)  # Use the custom bcrypt method
         
-        db.session.add(new_user)
-        db.session.commit()
+        if not new_user:
+            return jsonify({'message': 'Failed to create user'}), 500
         
         # Create storage folders for the new user using username
         try:
-            storage_manager.create_user_folders(new_user.username, new_user.id)
-            logger.info(f"✅ Storage folders created for user {new_user.username} (ID: {new_user.id})")
+            storage_manager.create_user_folders(new_user['username'], new_user['id'])
+            logger.info(f"✅ Storage folders created for user {new_user['username']} (ID: {new_user['id']})")
         except Exception as e:
-            logger.error(f"❌ Failed to create storage folders for user {new_user.username}: {e}")
+            logger.error(f"❌ Failed to create storage folders for user {new_user['username']}: {e}")
             # Don't fail registration if folder creation fails
         
-        logger.info(f"✅ REGISTRATION SUCCESS - User ID: {new_user.id}, Email: {new_user.email}, Username: {new_user.username}")
+        logger.info(f"✅ REGISTRATION SUCCESS - User ID: {new_user['id']}, Email: {new_user['email']}, Username: {new_user['username']}")
         return jsonify({
             'success': True,
             'message': 'User registered successfully',
-            'user': new_user.to_dict()
+            'user': {
+                'id': new_user['id'],
+                'username': new_user['username'],
+                'email': new_user['email'],
+                'name': new_user['name'],
+                'created_at': new_user['created_at'].isoformat() if hasattr(new_user['created_at'], 'isoformat') else str(new_user['created_at'])
+            }
         }), 201
         
     except Exception as e:
-        db.session.rollback()
         logger.error(f"❌ REGISTRATION FAILED - Error: {str(e)}")
         if "unique constraint" in str(e).lower() or "already exists" in str(e).lower():
             return jsonify({'message': 'Email or username already registered'}), 409
@@ -148,23 +153,34 @@ def login():
         if not password:
             return jsonify({'message': 'Password is required'}), 400
         
-        # Use SQLAlchemy User model for authentication
+        # Use database.py for authentication
         user = User.find_by_email(email)
-        if not user or not user.check_password(password):
-            logger.error(f"❌ LOGIN FAILED - Invalid credentials for email: {email}")
+        if not user:
+            logger.error(f"❌ LOGIN FAILED - User not found for email: {email}")
+            return jsonify({'message': 'Invalid credentials'}), 401
+        
+        # Verify password using database.py
+        if not User.verify_password(email, password):
+            logger.error(f"❌ LOGIN FAILED - Invalid password for email: {email}")
             return jsonify({'message': 'Invalid credentials'}), 401
 
-        logger.info(f"✅ LOGIN SUCCESS - User ID: {user.id}, Email: {user.email}")
+        logger.info(f"✅ LOGIN SUCCESS - User ID: {user['id']}, Email: {user['email']}")
         
         # Cast identity to string for JWT 'sub' claim compliance
-        access_token = create_access_token(identity=str(user.id))
+        access_token = create_access_token(identity=str(user['id']))
 
         return jsonify({
             'success': True,
             'message': 'Login successful',
             'token': access_token,  # Changed from access_token to token for frontend compatibility
             'access_token': access_token,  # Keep both for backward compatibility
-            'user': user.to_dict()
+            'user': {
+                'id': user['id'],
+                'username': user['username'],
+                'email': user['email'],
+                'name': user['name'],
+                'is_active': user['is_active']
+            }
         }), 200
         
     except Exception as e:
@@ -208,7 +224,7 @@ def forgot_password():
         if not email:
             return jsonify({'message': 'Email is required'}), 400
         
-        user = User.query.filter_by(email=email).first()
+        user = User.find_by_email(email)
         if not user:
             return jsonify({
                 'success': True,
@@ -222,3 +238,76 @@ def forgot_password():
         
     except Exception as e:
         return jsonify({'message': 'Failed to process request', 'details': str(e)}), 500
+
+@auth_bp.route('/change-password', methods=['POST', 'OPTIONS'])
+@jwt_required()
+def change_password():
+    """Change user password"""
+    if request.method == 'OPTIONS':
+        return '', 204
+    
+    try:
+        user_id = get_jwt_identity()
+        # Convert to int if it's a string (JWT stores as string)
+        if isinstance(user_id, str):
+            user_id = int(user_id)
+        data = request.get_json()
+        
+        if not data:
+            return jsonify({'message': 'No data provided'}), 400
+        
+        current_password = data.get('currentPassword', '')
+        new_password = data.get('newPassword', '')
+        
+        logger.info(f"🔵 PASSWORD CHANGE ATTEMPT - User ID: {user_id}")
+        
+        if not current_password:
+            return jsonify({'message': 'Current password is required'}), 400
+        
+        if not new_password:
+            return jsonify({'message': 'New password is required'}), 400
+        
+        # Validate new password strength
+        is_valid, password_message = validate_password(new_password)
+        if not is_valid:
+            return jsonify({'message': password_message}), 400
+        
+        # Get user
+        user = User.find_by_id(user_id)
+        if not user:
+            return jsonify({'message': 'User not found'}), 404
+        
+        # Verify current password
+        if not User.verify_password(user['email'], current_password):
+            logger.error(f"❌ PASSWORD CHANGE FAILED - Invalid current password for user {user_id}")
+            return jsonify({'message': 'Current password is incorrect'}), 401
+        
+        # Check if new password is same as current
+        if current_password == new_password:
+            return jsonify({'message': 'New password must be different from current password'}), 400
+        
+        # Update password
+        import bcrypt
+        from datetime import datetime, timezone
+        from database import db_manager
+        
+        password_hash = bcrypt.hashpw(new_password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+        
+        query = """
+        UPDATE users 
+        SET password_hash = %s, updated_at = %s
+        WHERE id = %s
+        """
+        
+        db_manager.execute_query(query, (password_hash, datetime.now(timezone.utc), user_id))
+        
+        logger.info(f"✅ PASSWORD CHANGED SUCCESSFULLY - User ID: {user_id}")
+        
+        return jsonify({
+            'success': True,
+            'message': 'Password changed successfully'
+        }), 200
+        
+    except Exception as e:
+        logger.error(f"❌ PASSWORD CHANGE FAILED - Error: {str(e)}")
+        return jsonify({'message': 'Failed to change password', 'details': str(e)}), 500

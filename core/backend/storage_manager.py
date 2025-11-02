@@ -164,16 +164,18 @@ class StorageManager:
         Args:
             username: User's username
         Returns: dict with uploads_bytes, deleted_bytes, total_bytes
+        Note: Only uploads_bytes counts toward quota now (deleted files are physically removed)
         """
         uploads_folder, deleted_folder = self.get_user_folders(username)
         
         uploads_bytes = self.get_folder_size(uploads_folder)
         deleted_bytes = self.get_folder_size(deleted_folder)
-        total_bytes = uploads_bytes + deleted_bytes
+        # FIX: Only count active uploads toward quota, not deleted files
+        total_bytes = uploads_bytes
         
         return {
             'uploads_bytes': uploads_bytes,
-            'deleted_bytes': deleted_bytes,
+            'deleted_bytes': deleted_bytes,  # For reference only, not counted in quota
             'total_bytes': total_bytes,
             'quota_bytes': USER_QUOTA_BYTES,
             'remaining_bytes': max(0, USER_QUOTA_BYTES - total_bytes),

@@ -1,17 +1,16 @@
 """
-Delete Controller - Handles file soft deletion
-Separated from other file operations per architecture requirements
+Delete Controller - Handles file deletion for both database and local storage
 """
 from flask import jsonify, g
 from datetime import datetime
-from models import db, File
+from models import File
 from storage_manager import storage_manager
+import os
+from pathlib import Path
 
 def delete_file(file_id):
     """
-    Soft delete file (move to deleted folder).
-    Moves file from ./storage/<user_id>/uploads/ to ./storage/<user_id>/deleted/
-    and updates metadata status to 'deleted' with timestamp.
+    Hard delete file - removes file from database AND physical storage.
     
     Args:
         file_id: UUID of the file to delete
@@ -22,32 +21,58 @@ def delete_file(file_id):
         500: Server error
     """
     try:
-        user_id = g.current_user.id
-        username = g.current_user.username
+        user_id = g.current_user['id']
+        username = g.current_user['username']
         
         # Find file and verify ownership
-        file_record = File.find_by_id_and_owner(file_id, user_id)
+        file_record = File.find_by_id(file_id)
         if not file_record:
-            return jsonify({'error': 'File not found or access denied'}), 404
+            return jsonify({'error': 'File not found'}), 404
+            
+        # Check ownership
+        if file_record['owner_id'] != user_id:
+            return jsonify({'error': 'Access denied - you are not the owner'}), 403
         
-        # Move file from uploads to deleted folder using username
-        deleted_path = storage_manager.move_to_deleted(file_record.storage_path, username)
-        if deleted_path is None:
-            return jsonify({'error': 'Failed to move file to deleted folder'}), 500
+        # Store storage_path before deleting from database
+        storage_path = file_record.get('storage_path')
         
-        # Update database record
-        file_record.status = 'deleted'
-        file_record.deleted_at = datetime.utcnow()
-        file_record.storage_path = deleted_path  # Update to new path in deleted folder
-        file_record.updated_at = datetime.utcnow()
+        # Delete from database first
+        deleted_file = File.delete_by_id(file_id, user_id)
         
-        db.session.commit()
+        if not deleted_file:
+            return jsonify({'error': 'File not found or already deleted'}), 404
         
-        print(f"✅ File soft deleted: {file_id} → {deleted_path}")
+        # Delete physical file from storage if it exists
+        if storage_path:
+            try:
+                file_path = Path(storage_path)
+                if file_path.exists():
+                    os.remove(file_path)
+                    print(f"✅ Physical file deleted: {storage_path}")
+                else:
+                    print(f"⚠️ Physical file not found (already deleted?): {storage_path}")
+            except Exception as e:
+                print(f"⚠️ Failed to delete physical file {storage_path}: {e}")
+                # Continue anyway - database record is deleted
+        
+        # Emit sync event for real-time dashboard update
+        try:
+            from utils.sync_events import emit_sync_event
+            emit_sync_event(
+                user_id=user_id,
+                event_type='file_deleted',
+                payload={
+                    'file_id': file_id,
+                    'filename': deleted_file.get('original_filename', 'unknown')
+                }
+            )
+        except Exception as e:
+            print(f"Warning: Failed to emit sync event: {e}")
+        
+        print(f"✅ File deleted from database: {file_id} (owner: {username})")
         
         return jsonify({'message': 'File deleted successfully'}), 200
         
     except Exception as e:
-        db.session.rollback()
         print(f"Delete error: {str(e)}")
         return jsonify({'error': 'Failed to delete file'}), 500

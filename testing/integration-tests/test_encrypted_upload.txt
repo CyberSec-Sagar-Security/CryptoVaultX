@@ -1,3 +1,0 @@
-This is a test file for encrypted upload.
-Contains some sample text to test the encryption and upload workflow.
-File created for CryptoVaultX encrypted upload testing.

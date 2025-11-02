@@ -143,7 +143,43 @@ const Upload: React.FC = () => {
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
   };
 
-  const handleFileSelect = useCallback((selectedFiles: FileList) => {
+  // Check storage quota before upload
+  const checkStorageQuota = async (filesToUpload: FileUpload[]): Promise<boolean> => {
+    try {
+      const response = await apiRequest('/files/quota');
+      const storageInfo = response.storage_info || {};
+      const usedBytes = storageInfo.used_bytes || 0;
+      const quotaBytes = storageInfo.quota_bytes || 536870912; // 512 MB
+      const availableBytes = quotaBytes - usedBytes;
+      
+      // Calculate total size of files to upload
+      const totalUploadSize = filesToUpload.reduce((sum, f) => sum + f.file.size, 0);
+      
+      if (totalUploadSize > availableBytes) {
+        const usedMB = (usedBytes / (1024 * 1024)).toFixed(2);
+        const quotaMB = (quotaBytes / (1024 * 1024)).toFixed(0);
+        const availableMB = (availableBytes / (1024 * 1024)).toFixed(2);
+        const uploadMB = (totalUploadSize / (1024 * 1024)).toFixed(2);
+        
+        alert(
+          `❌ Storage Limit Exceeded!\n\n` +
+          `Current Usage: ${usedMB} MB / ${quotaMB} MB\n` +
+          `Available Space: ${availableMB} MB\n` +
+          `Upload Size: ${uploadMB} MB\n\n` +
+          `Please delete some files to free up space before uploading.`
+        );
+        return false;
+      }
+      
+      return true;
+    } catch (error) {
+      console.error('Failed to check storage quota:', error);
+      // Allow upload if quota check fails (to not block users)
+      return true;
+    }
+  };
+
+  const handleFileSelect = useCallback(async (selectedFiles: FileList) => {
     const newFiles: FileUpload[] = Array.from(selectedFiles).map(file => ({
       id: `${Date.now()}-${Math.random()}`,
       file,
@@ -153,7 +189,7 @@ const Upload: React.FC = () => {
       autoEncrypt: uploadSettings.autoEncrypt,
     }));
 
-    // Check file size limits (512MB)
+    // Check file size limits (512MB per file)
     const validFiles = newFiles.filter(fileUpload => {
       const fileSizeMB = fileUpload.file.size / (1024 * 1024);
       return fileSizeMB <= uploadSettings.maxFileSize;
@@ -163,6 +199,16 @@ const Upload: React.FC = () => {
       const fileSizeMB = fileUpload.file.size / (1024 * 1024);
       return fileSizeMB > uploadSettings.maxFileSize;
     });
+
+    // Check storage quota before adding files
+    if (validFiles.length > 0) {
+      const hasSpace = await checkStorageQuota(validFiles);
+      if (!hasSpace) {
+        // Don't add files if storage quota exceeded
+        console.warn('❌ Upload blocked: Storage quota exceeded');
+        return;
+      }
+    }
 
     if (invalidFiles.length > 0) {
       // Show detailed error for oversized files
@@ -250,13 +296,13 @@ const Upload: React.FC = () => {
       });
       
       // Upload to backend API using direct fetch for FormData
-      const token = localStorage.getItem('access_token');
+      const token = localStorage.getItem('access_token') || localStorage.getItem('token');
       if (!token) {
         throw new Error('No authentication token found. Please login again.');
       }
       
       const uploadUrl = `${API_BASE_URL}/files`;
-      console.log(`🌐 Upload URL: ${uploadUrl}`);
+      console.log(`📤 Uploading to: ${uploadUrl}`);
       
       const response = await fetch(uploadUrl, {
         method: 'POST',
@@ -289,10 +335,12 @@ const Upload: React.FC = () => {
       await new Promise(resolve => setTimeout(resolve, 500));
       updateFile({ status: 'completed', progress: 100 });
 
-      // Dispatch custom event to notify other components about successful upload
+      // Dispatch custom events to notify other components about successful upload
       window.dispatchEvent(new CustomEvent('fileUploaded', { 
         detail: { fileId: result.id, filename: result.original_filename, storage: 'backend' } 
       }));
+      window.dispatchEvent(new CustomEvent('storageChanged'));
+      console.log('📡 File upload events dispatched');
 
     } catch (error) {
       console.error('❌ Upload error:', error);
@@ -302,6 +350,7 @@ const Upload: React.FC = () => {
         type: error instanceof TypeError ? 'Network/CORS Error' : 'Unknown Error',
         file: fileUpload.file.name
       });
+      
       updateFile({ 
         status: 'error', 
         error: errorMessage
@@ -309,7 +358,7 @@ const Upload: React.FC = () => {
     }
   };
 
-  const startUpload = async () => {
+  const handleUpload = async () => {
     setIsUploading(true);
     
     const pendingFiles = files.filter(f => f.status === 'pending');
@@ -455,7 +504,7 @@ const Upload: React.FC = () => {
                       </CardDescription>
                     </div>
                     <Button
-                      onClick={startUpload}
+                      onClick={handleUpload}
                       disabled={isUploading || files.every(f => f.status !== 'pending')}
                       className="bg-gradient-to-r from-indigo-600 to-cyan-500 hover:from-indigo-500 hover:to-cyan-400"
                     >
