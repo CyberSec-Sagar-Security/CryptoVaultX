@@ -136,7 +136,7 @@ Starts PostgreSQL, Backend, and Frontend automatically.
 
 ```env
 FLASK_ENV=development
-DATABASE_URL=postgresql://postgres:sql123@localhost:5432/cryptovault_db
+DATABASE_URL=postgresql://postgres:password-here@localhost:port-number-here/cryptovault_db
 JWT_SECRET_KEY=your-secret-key-here
 SECRET_KEY=your-flask-secret-key
 ```
